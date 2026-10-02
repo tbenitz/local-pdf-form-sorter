@@ -1,0 +1,2897 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Quire</title>
+  <meta name="description" content="Sort fillable PDFs and scans into form families, then versions, then names. Nothing is uploaded." />
+  <meta name="theme-color" content="#efe8da" />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,650&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --paper: #efe8da;
+      --surface: #f7f3ea;
+      --ink: #1c1916;
+      --muted: #6a6358;
+      --line: #d9d0c0;
+      --seal: #1b5e45;
+      --on-seal: #f3faf6;
+      --seal-soft: #e4f0ea;
+      --rust: #8f3d2a;
+      --on-rust: #fff7f4;
+      --rust-soft: #f8ebe6;
+      --sans: "Public Sans", ui-sans-serif, system-ui, sans-serif;
+      --display: "Fraunces", Georgia, serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: var(--sans);
+      background: var(--paper);
+      color: var(--ink);
+      font-size: 16px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: default; opacity: 0.45; }
+    :focus-visible { outline: 2px solid var(--seal); outline-offset: 2px; }
+    h1, h2, h3 { font-family: var(--display); font-weight: 560; letter-spacing: -0.02em; margin: 0; text-wrap: balance; }
+    p { margin: 0; text-wrap: pretty; }
+    .app { height: 100dvh; display: flex; flex-direction: column; min-height: 0; }
+    header.top {
+      display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end;
+      justify-content: space-between; padding: 14px 16px 10px;
+    }
+    .brand { min-width: 0; }
+    h1 { font-size: 1.75rem; line-height: 1; }
+    .tag { color: var(--muted); font-size: 0.875rem; margin-top: 4px; max-width: 36rem; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    button.btn, .btn {
+      min-height: 44px; padding: 8px 12px; border-radius: 8px;
+      border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+    }
+    button.primary { background: var(--seal); border-color: var(--seal); color: var(--on-seal); }
+    button.rust { background: var(--rust); border-color: var(--rust); color: var(--on-rust); }
+    button.ghost { background: transparent; }
+    .status-row {
+      display: flex; justify-content: space-between; gap: 12px; align-items: baseline;
+      padding: 0 16px 8px; color: var(--muted); font-size: 0.875rem;
+    }
+    #status { color: var(--ink); }
+    .meter { height: 3px; background: var(--line); }
+    .meter > span { display: block; height: 100%; width: 0; background: var(--seal); transition: width 160ms ease; }
+    .tabs { display: none; gap: 8px; padding: 8px 16px 0; }
+    .tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+    .panes { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: 1fr; }
+    .pane { min-height: 0; min-width: 0; overflow: auto; padding: 12px 16px 24px; }
+    .pane h2 { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+    @media (min-width: 960px) {
+      .tabs { display: none !important; }
+      .panes { grid-template-columns: 220px minmax(0, 1fr) minmax(300px, 440px); }
+      .pane { display: block !important; border-left: 1px solid var(--line); }
+      #rail { border-left: 0; }
+    }
+    @media (max-width: 959px) {
+      .tabs { display: flex; }
+      .pane { display: none; }
+      .pane.on { display: block; }
+    }
+    .stage {
+      width: 100%; display: grid; grid-template-columns: 28px 1fr auto; gap: 8px;
+      align-items: center; text-align: left; background: transparent; border: 0;
+      border-left: 2px solid var(--line); border-radius: 0; min-height: 40px; padding: 4px 8px;
+      color: var(--ink);
+    }
+    .stage.on { border-left-color: var(--seal); background: var(--seal-soft); }
+    .stage .num { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.75rem; }
+    .stage .count { font-variant-numeric: tabular-nums; color: var(--muted); }
+    .log { margin-top: 16px; display: grid; gap: 4px; }
+    .log p { font-size: 0.75rem; color: var(--muted); }
+    .family { margin-bottom: 18px; }
+    .family-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .slug {
+      font-family: var(--display); font-size: 1.35rem; background: transparent;
+      border: 0; border-bottom: 1px solid var(--line); min-height: 44px; padding: 0 4px; width: min(100%, 220px);
+    }
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .card {
+      background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+      padding: 10px; display: grid; gap: 6px; text-align: left; width: 100%;
+    }
+    .card.is-on { border-color: var(--seal); box-shadow: inset 0 0 0 1px var(--seal); }
+    .card.is-yes { background: var(--seal-soft); }
+    .card.is-junk, .card.is-bad { background: var(--rust-soft); }
+    .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; height: 72px; }
+    .thumbs img, .ghost { width: 100%; height: 72px; object-fit: cover; border-radius: 4px; background: #fff; border: 1px solid var(--line); }
+    .ghost {
+      background:
+        linear-gradient(var(--line), var(--line)) 8px 16px / calc(100% - 16px) 1px no-repeat,
+        linear-gradient(var(--line), var(--line)) 8px 28px / 70% 1px no-repeat,
+        linear-gradient(var(--line), var(--line)) 8px 40px / calc(100% - 16px) 1px no-repeat,
+        linear-gradient(var(--line), var(--line)) 8px 52px / 40% 1px no-repeat,
+        var(--surface);
+    }
+    .card-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+    .card h3 { font-size: 1.05rem; }
+    .pill { font-size: 0.75rem; border: 1px solid var(--line); border-radius: 999px; padding: 2px 8px; }
+    .pill.high { background: var(--seal-soft); border-color: transparent; color: var(--seal); }
+    .pill.review { color: var(--rust); }
+    .why, .mix, .hint { font-size: 0.8125rem; color: var(--muted); }
+    .card-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .card-actions button, .mini {
+      min-height: 36px; padding: 4px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface);
+    }
+    .card-actions select, .map select, .stack input, .stack select, .stack textarea {
+      min-height: 44px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); padding: 6px 8px;
+    }
+    .empty {
+      border: 1px dashed var(--line); border-radius: 12px; padding: 28px 18px; background: var(--surface);
+      display: grid; gap: 8px; max-width: 40rem;
+    }
+    .empty ol { margin: 0; padding-left: 1.2rem; color: var(--muted); }
+    .file {
+      display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--line);
+    }
+    .file strong, .file .proposed { overflow-wrap: anywhere; }
+    .proposed { font-variant-numeric: tabular-nums; }
+    .row-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .check { display: flex; gap: 8px; align-items: flex-start; }
+    .detail-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    .map { display: grid; gap: 8px; margin: 4px 0 14px; }
+    .map label, .stack label { display: grid; gap: 4px; font-size: 0.8125rem; color: var(--muted); }
+    .slots { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .slot {
+      text-align: left; border: 1px solid var(--line); background: var(--surface);
+      border-radius: 10px; padding: 8px 10px; min-height: 76px; display: grid; align-content: center; gap: 2px;
+    }
+    .slot.on { border-color: var(--seal); background: var(--seal-soft); box-shadow: inset 0 0 0 1px var(--seal); }
+    .slot .k { font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+    .slot strong, .fname { overflow-wrap: anywhere; }
+    .slot em { font-style: normal; color: var(--muted); font-size: 0.8125rem; overflow-wrap: anywhere; }
+    .field-list { display: grid; gap: 6px; }
+    .field-row {
+      width: 100%; text-align: left; display: flex; flex-wrap: wrap; gap: 2px 10px; align-items: baseline;
+      border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 8px 10px; min-height: 44px;
+    }
+    .field-row.on { border-color: var(--seal); background: var(--seal-soft); }
+    .fname { font-weight: 600; flex: 1 1 8rem; }
+    .fvals { color: var(--muted); font-size: 0.8125rem; flex: 1 1 8rem; overflow-wrap: anywhere; }
+    .fused { font-size: 0.75rem; margin-left: auto; }
+    .textmap { display: grid; gap: 8px; }
+    .textmap summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+    .snip {
+      white-space: pre-wrap; font-size: 0.75rem; line-height: 1.4; background: #fff;
+      border: 1px solid var(--line); border-radius: 8px; padding: 8px; max-height: 9rem; overflow: auto; margin: 0;
+    }
+    dialog {
+      border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+      border-radius: 12px; width: min(720px, calc(100vw - 24px)); max-height: min(80dvh, 760px);
+      padding: 16px; overflow: auto;
+    }
+    dialog::backdrop { background: rgba(28, 25, 22, 0.4); }
+    .stack { display: grid; gap: 10px; }
+    .grid-2 { display: grid; gap: 10px; }
+    @media (min-width: 640px) { .grid-2 { grid-template-columns: 1fr 1fr; } }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+    th, td { border-bottom: 1px solid var(--line); text-align: left; padding: 6px 4px; vertical-align: top; }
+    .drop {
+      outline: 2px dashed var(--seal); outline-offset: -8px;
+    }
+    .banner {
+      margin: 0 16px 8px; padding: 8px 10px; background: var(--rust-soft); border-radius: 8px; color: var(--ink);
+      font-size: 0.875rem;
+    }
+    .hidden { display: none !important; }
+    @media (prefers-reduced-motion: reduce) {
+      * { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app">
+    <header class="top">
+      <div class="brand">
+        <h1>Quire</h1>
+        <p class="tag">Group similar PDFs, then map each field onto a filename. Files stay on this machine.</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="openFolder" type="button">Open folder</button>
+        <button class="btn" id="addFiles" type="button">Add PDFs</button>
+        <button class="btn" id="samples" type="button">Sample library</button>
+        <button class="btn" id="run" type="button">Run pipeline</button>
+        <button class="btn" id="pause" type="button" disabled>Pause</button>
+        <button class="btn" id="downloadHtml" type="button">Download quire.html</button>
+      </div>
+    </header>
+    <div class="status-row">
+      <p id="status">Open a folder or load the sample library. Nothing is renamed until you confirm a group.</p>
+      <p id="counts"></p>
+    </div>
+    <div class="meter" aria-hidden="true"><span id="bar"></span></div>
+    <p id="banner" class="banner hidden"></p>
+    <nav class="tabs" aria-label="Panes">
+      <button type="button" class="btn" data-pane="rail" aria-selected="false">Stages</button>
+      <button type="button" class="btn" data-pane="board" aria-selected="true">Groups</button>
+      <button type="button" class="btn" data-pane="detail" aria-selected="false">Map</button>
+    </nav>
+    <div class="panes">
+      <aside class="pane on" id="rail" data-pane-body="rail">
+        <h2>Stages</h2>
+        <div id="stages"></div>
+        <div class="log" id="log"></div>
+        <div class="detail-bar">
+          <button class="btn ghost" id="regroup" type="button">Regroup</button>
+          <button class="btn ghost" id="openSettings" type="button">Advanced</button>
+        </div>
+      </aside>
+      <section class="pane on" id="board" data-pane-body="board" aria-label="Groups"></section>
+      <section class="pane" id="detail" data-pane-body="detail" aria-label="Files in the selected group"></section>
+    </div>
+  </div>
+  <input id="filePick" type="file" accept="application/pdf,.pdf" multiple hidden />
+  <input id="dirPick" type="file" accept=".pdf,application/pdf" webkitdirectory multiple hidden />
+  <dialog id="settings"></dialog>
+  <dialog id="dry"></dialog>
+  <script type="module">
+/* Quire — local form fingerprint, cluster, and rename. No upload. */
+
+const DEFAULTS = {
+  ocrLang: "eng",
+  ocrHeaderOnly: true,
+  dpi: 72,
+  skewDeg: 3,
+  textJaccard: 0.58,
+  fieldVersionJaccard: 0.9,
+  fieldFamilyJaccard: 0.55,
+  hashMax: 0.22,
+  projMin: 0.84,
+  textPlaceMinTokens: 8,
+  ocrTriggerChars: 40,
+  sharedTextMin: 6,
+  ignoreTokens:
+    "page of the and for date signature sign signed print please form by to a an or if is this that with from your you our name last first middle number street city state zip address phone email dob section part line yes no not are be as at on in it we do did have has will shall must may any all other than under above below into over per via using use used following hereby declare doc document copy copies",
+  minPages: 1,
+  maxPages: 80,
+  workers: 2,
+  trustFields: true,
+  imageSampleFirst: 50,
+  layoutSample: 8,
+  dateFormat: "yyyy-MM-dd",
+  timeZone: "",
+  collision: "suffix",
+  maxPath: 180,
+  renameMode: "inplace",
+  pattern: "{family}_{version}_{lastname}_{first}_{date}_{original}",
+  useMtime: false,
+  headerBand: 0.22,
+};
+
+/* Optional filename maps. Edit this list in the HTML if you already know the PDF fields.
+   match: field names that must all exist, separated by |
+   lastname / first / date / case: the PDF field to use, or "" to leave blank
+   A text pattern uses mode "regex" only from the Map panel, not from this list. */
+const PRESET_MAPS = [
+  // { match: "LastName|FirstName", lastname: "LastName", first: "FirstName", date: "", case: "" },
+];
+
+const SLOT_DEFS = [
+  ["lastname", "Last name"],
+  ["first", "First name"],
+  ["date", "Date"],
+  ["case", "Case"],
+];
+
+const enc = new TextEncoder();
+const state = {
+  settings: { ...DEFAULTS },
+  files: [],
+  sources: new Map(),
+  meta: {},
+  batches: [],
+  groups: [],
+  thumbs: new Map(),
+  dirHandle: null,
+  running: false,
+  pause: false,
+  sampleHold: false,
+  imageBudget: DEFAULTS.imageSampleFirst,
+  layoutComplete: false,
+  selected: null,
+  arm: "lastname",
+  checked: new Set(),
+  activity: [],
+  debug: [],
+  phase: "idle",
+  banner: "",
+};
+
+const $ = (id) => document.getElementById(id);
+
+function fnv(str) {
+  let h = 0x811c9dc5;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+function jaccardSets(a, b) {
+  const A = a instanceof Set ? a : new Set(a || []);
+  const B = b instanceof Set ? b : new Set(b || []);
+  let inter = 0;
+  for (const x of A) if (B.has(x)) inter++;
+  const union = A.size + B.size - inter;
+  return union ? inter / union : 0;
+}
+
+function hamming(a, b) {
+  if (!a || !b || a.length !== b.length) return 1;
+  let n = 0;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) n++;
+  return n / a.length;
+}
+
+function cosine(a, b) {
+  if (!a || !b || a.length !== b.length || !a.length) return 0;
+  let dot = 0, na = 0, nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  if (!na || !nb) return 0;
+  return dot / Math.sqrt(na * nb);
+}
+
+function tokenIgnore(settings) {
+  return new Set(String(settings.ignoreTokens || "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+}
+
+function normalizeText(raw, settings) {
+  const original = String(raw || "");
+  const realChars = (original.match(/[A-Za-z]/g) || []).length;
+  const revRe = /\brev(?:ision)?\.?\s*[:#]?\s*(\d{1,2}[\/.\-]\d{2,4}|\d{4})\b/i;
+  const rm = revRe.exec(original);
+  const revision = rm ? rm[1] : "";
+  let text = original.replace(revRe, " ");
+  text = text.replace(/\b(last|first|middle|patient|applicant|employee|surname|given)\s*name\b[:\-\s]+[A-Za-z][A-Za-z'’\-]{1,40}/gi, " ");
+  text = text.replace(/\b\d{3}-\d{2}-\d{4}\b/g, " ");
+  text = text.replace(/\$\s?\d[\d,]*\.?\d*/g, " ");
+  text = text.replace(/\b[\w.+-]+@[\w.-]+\.\w+\b/g, " ");
+  text = text.replace(/\b(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]\d{3}[\s.-]\d{4}\b/g, " ");
+  text = text.replace(/\b\d{4}-\d{2}-\d{2}\b/g, " ");
+  text = text.replace(/\b\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}\b/g, " ");
+  text = text.replace(/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b/gi, " ");
+  text = text.replace(/\b[A-Z]{1,4}-?\d{5,}\b/g, " ");
+  text = text.replace(/\b\d{6,}\b/g, " ");
+  const lower = text.toLowerCase();
+  const forms = lower.match(/\b[a-z]{1,3}-?\d{1,2}\b/g) || [];
+  const ignore = tokenIgnore(settings);
+  const tokens = [];
+  for (const p of lower.split(/[^a-z0-9]+/)) {
+    if (!p || ignore.has(p) || /^\d+$/.test(p) || p.length < 4) continue;
+    tokens.push(p);
+  }
+  for (const f of forms) {
+    const compact = f.replace("-", "");
+    if (!tokens.includes(compact)) tokens.push(compact);
+    if (f.includes("-") && !tokens.includes(f)) tokens.push(f);
+  }
+  return { tokens, revision, realChars };
+}
+
+function textSig(tokens) {
+  return [...new Set(tokens || [])].sort().join("|");
+}
+
+function versionSlug(rev) {
+  const s = String(rev || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return s ? "rev-" + s : "";
+}
+
+function sanitizeToken(v) {
+  return String(v || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^A-Za-z0-9._-]+/g, "")
+    .replace(/-+/g, "-")
+    .replace(/^[.\-_]+|[.\-_]+$/g, "")
+    .slice(0, 80);
+}
+
+function clipName(name, max) {
+  const limit = Math.max(12, max || 180);
+  if (name.length <= limit) return name;
+  const dot = name.lastIndexOf(".");
+  const ext = dot > 0 ? name.slice(dot) : ".pdf";
+  const stem = name.slice(0, Math.max(1, limit - ext.length)).replace(/[.\-_]+$/g, "");
+  return stem + ext;
+}
+
+function fillPattern(pattern, bag, max) {
+  let s = String(pattern || "").replace(/\{(family|version|lastname|first|date|original|case)\}/gi, (_, k) =>
+    sanitizeToken(bag[k.toLowerCase()] || ""),
+  );
+  s = s.replace(/_+/g, "_").replace(/^_|_$/g, "");
+  if (!s) s = "untitled";
+  if (!/\.pdf$/i.test(s)) s += ".pdf";
+  return clipName(s, max);
+}
+
+function parseLooseDate(value) {
+  const s = String(value || "").trim();
+  if (!s) return null;
+  const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+  const mdy = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+  if (!mdy) return null;
+  let y = +mdy[3];
+  if (y < 100) y += y > 50 ? 1900 : 2000;
+  return new Date(Date.UTC(y, +mdy[1] - 1, +mdy[2]));
+}
+
+function formatDate(date, fmt, tz) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  let y, m, d;
+  if (tz) {
+    const parts = new Intl.DateTimeFormat("en-US", {
+      timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(date);
+    y = parts.find((p) => p.type === "year")?.value || "";
+    m = parts.find((p) => p.type === "month")?.value || "";
+    d = parts.find((p) => p.type === "day")?.value || "";
+  } else {
+    y = String(date.getUTCFullYear());
+    m = String(date.getUTCMonth() + 1).padStart(2, "0");
+    d = String(date.getUTCDate()).padStart(2, "0");
+  }
+  return (fmt || "yyyy-MM-dd").replace("yyyy", y).replace("MM", m).replace("dd", d);
+}
+
+function sizeBucket(w, h) {
+  const s = Math.min(w, h);
+  const l = Math.max(w, h);
+  const near = (a, b, tol = 36) => Math.abs(a - b) < tol;
+  if (near(s, 612) && near(l, 792)) return "letter";
+  if (near(s, 612) && near(l, 1008, 48)) return "legal";
+  if (near(s, 595) && near(l, 842)) return "a4";
+  return "p" + Math.round(s / 36) + "x" + Math.round(l / 36);
+}
+
+function isStrong(file, settings) {
+  return (file.fieldNames?.length || 0) >= 2 || (file.tokens?.length || 0) >= settings.textPlaceMinTokens;
+}
+
+function looksJunk(file) {
+  if ((file.fieldNames?.length || 0) >= 2) return false;
+  const tokens = file.tokens || [];
+  // Image-only pages have no tokens yet. Do not call them covers until layout
+  // shows they are actually blank.
+  if (tokens.length === 0 && (file.realChars || 0) < 12) {
+    return !!(file.didLayout && (file.ink ?? 1) < 0.035);
+  }
+  const junkLex = new Set(["fax", "cover", "sheet", "facsimile", "attached", "pages", "sent", "documents", "follow", "including"]);
+  const meaningful = tokens.filter((t) => !junkLex.has(t));
+  return tokens.length <= 6 && meaningful.length <= 2 && (file.realChars || 0) < 120;
+}
+
+function UnionFind() {
+  const parent = new Map();
+  const reasons = new Map();
+  function add(id) {
+    if (!parent.has(id)) {
+      parent.set(id, id);
+      reasons.set(id, new Set());
+    }
+  }
+  function find(id) {
+    let x = id;
+    while (parent.get(x) !== x) x = parent.get(x);
+    let y = id;
+    while (parent.get(y) !== x) {
+      const n = parent.get(y);
+      parent.set(y, x);
+      y = n;
+    }
+    return x;
+  }
+  function union(a, b, reason) {
+    add(a);
+    add(b);
+    const ra = find(a);
+    const rb = find(b);
+    if (reason) reasons.get(ra).add(reason);
+    if (ra === rb) return;
+    parent.set(rb, ra);
+    for (const item of reasons.get(rb)) reasons.get(ra).add(item);
+    if (reason) reasons.get(ra).add(reason);
+  }
+  return { add, find, union, reasons: (id) => reasons.get(find(id)) || new Set() };
+}
+
+function familyKeyFor(members) {
+  const df = new Map();
+  for (const m of members) for (const t of new Set(m.tokens || [])) df.set(t, (df.get(t) || 0) + 1);
+  const ranked = [...df.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  const need = Math.max(1, Math.ceil(members.length * 0.5));
+  let stable = ranked.filter(([, c]) => c >= need).map(([t]) => t);
+  if (stable.length < 3) stable = ranked.slice(0, 6).map(([t]) => t);
+  stable.sort();
+  return "f:" + fnv(stable.join("|") || members[0].id);
+}
+
+function suggestSlug(members) {
+  const blob = members.map((m) => (m.tokens || []).join(" ") + " " + (m.snippet || "")).join(" ").toLowerCase();
+  if (/\bw-?9\b/.test(blob)) return "w9";
+  if (/\bhipaa\b|\bprivacy\b/.test(blob)) return "hipaa";
+  if (/\bintake\b/.test(blob)) return "intake";
+  if (/\bregistration\b/.test(blob)) return "registration";
+  if (/\bcertificate\b|\bservice\b/.test(blob)) return "certificate";
+  if (/\bequipment\b|\bcheckout\b/.test(blob)) return "equipment";
+  const df = new Map();
+  for (const m of members) for (const t of new Set(m.tokens || [])) df.set(t, (df.get(t) || 0) + 1);
+  const top = [...df.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length).map((x) => x[0]).find((t) => t.length >= 5);
+  return (top || "form").slice(0, 24);
+}
+
+function versionKeyFor(file) {
+  const parts = [];
+  if ((file.fieldNames?.length || 0) >= 2 && file.fieldSig) parts.push("fld-" + file.fieldSig.slice(0, 12));
+  const rev = versionSlug(file.revision);
+  if (rev) parts.push(rev);
+  parts.push("p" + (file.pageCount || 1));
+  if (file.packet) parts.push("packet");
+  return parts.join("~");
+}
+
+function layoutClusters(files, settings) {
+  const leaders = [];
+  const sorted = [...files].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+  for (const file of sorted) {
+    let best = null;
+    for (const group of leaders) {
+      if (!group.leader.dHash || !file.dHash || group.leader.sizeBucket !== file.sizeBucket) continue;
+      const ham = hamming(group.leader.dHash, file.dHash);
+      const proj = (cosine(group.leader.projV, file.projV) + cosine(group.leader.projH, file.projH)) / 2;
+      if (ham <= settings.hashMax && proj >= settings.projMin && (!best || proj > best.proj)) best = { group, proj, ham };
+    }
+    if (best) best.group.members.push(file);
+    else leaders.push({ leader: file, members: [file] });
+  }
+  return leaders;
+}
+
+function clusterFiles(files, settings) {
+  if (settings.layoutComplete) state.debug = [];
+  const active = files.filter((f) => f.didRead && !f.quarantine);
+  const ejected = [];
+  const junk = [];
+  const manual = [];
+  const strong = [];
+  const weak = [];
+  for (const file of active) {
+    if (file.outOfRange) continue;
+    if (file.ejected) ejected.push(file);
+    else if (file.forceJunk) junk.push(file);
+    else if (file.manualFamilyId) manual.push(file);
+    else if (file.junkLikely && !isStrong(file, settings)) junk.push(file);
+    else if (isStrong(file, settings)) strong.push(file);
+    else weak.push(file);
+  }
+
+  const uf = UnionFind();
+  for (const file of strong) uf.add(file.id);
+  const byField = new Map();
+  for (const file of strong) {
+    if ((file.fieldNames?.length || 0) >= 2 && file.fieldSig) {
+      if (!byField.has(file.fieldSig)) byField.set(file.fieldSig, []);
+      byField.get(file.fieldSig).push(file);
+    }
+  }
+  for (const arr of byField.values()) {
+    for (let i = 1; i < arr.length; i++) uf.union(arr[0].id, arr[i].id, "fields-exact");
+  }
+  const fieldReps = [...byField.values()].map((arr) => arr[0]);
+  for (let i = 0; i < fieldReps.length; i++) {
+    for (let j = i + 1; j < fieldReps.length; j++) {
+      const jac = jaccardSets(fieldReps[i].fieldNames, fieldReps[j].fieldNames);
+      if (jac >= settings.fieldVersionJaccard) uf.union(fieldReps[i].id, fieldReps[j].id, "fields-exact");
+      else if (jac >= settings.fieldFamilyJaccard) uf.union(fieldReps[i].id, fieldReps[j].id, "fields-near");
+    }
+  }
+
+  const textFiles = strong.filter((f) => (f.tokens?.length || 0) >= settings.textPlaceMinTokens);
+  const bySig = new Map();
+  for (const file of textFiles) {
+    const sig = textSig(file.tokens);
+    if (!bySig.has(sig)) bySig.set(sig, []);
+    bySig.get(sig).push(file);
+  }
+  for (const arr of bySig.values()) {
+    for (let i = 1; i < arr.length; i++) uf.union(arr[0].id, arr[i].id, "text");
+  }
+  const reps = [...bySig.values()].map((arr) => arr[0]);
+  for (let i = 0; i < reps.length; i++) {
+    for (let j = i + 1; j < reps.length; j++) {
+      const A = new Set(reps[i].tokens);
+      const B = new Set(reps[j].tokens);
+      let inter = 0;
+      for (const t of A) if (B.has(t)) inter++;
+      const jac = jaccardSets(A, B);
+      if (inter >= (settings.sharedTextMin || 6) && jac >= settings.textJaccard) uf.union(reps[i].id, reps[j].id, "text");
+    }
+  }
+
+  const assignments = new Map();
+  const comps = new Map();
+  for (const file of strong) {
+    const root = uf.find(file.id);
+    if (!comps.has(root)) comps.set(root, []);
+    comps.get(root).push(file);
+  }
+  const familyOf = new Map();
+  for (const [root, members] of comps) familyOf.set(root, familyKeyFor(members));
+
+  const versionGroups = new Map();
+  for (const file of strong) {
+    const familyKey = familyOf.get(uf.find(file.id));
+    const versionKey = versionKeyFor(file);
+    const reasons = new Set(uf.reasons(file.id));
+    assignments.set(file.id, { familyKey, versionKey, reasons });
+    const gid = familyKey + "@@" + versionKey;
+    if (!versionGroups.has(gid)) versionGroups.set(gid, []);
+    versionGroups.get(gid).push(file);
+  }
+
+  for (const [gid, members] of [...versionGroups.entries()]) {
+    const fieldBacked = members.some((m) => (m.fieldNames?.length || 0) >= 2);
+    if (fieldBacked && settings.trustFields) continue;
+    const hashed = members.filter((m) => m.dHash && m.projV);
+    if (hashed.length < 2) continue;
+    const clusters = layoutClusters(hashed, settings);
+    if (clusters.length < 2) continue;
+    versionGroups.delete(gid);
+    for (const cluster of clusters) {
+      const suffix = "L" + fnv(cluster.leader.dHash).slice(0, 4);
+      for (const member of cluster.members) {
+        const assignment = assignments.get(member.id);
+        assignment.versionKey = assignment.versionKey + "~" + suffix;
+        assignment.reasons.add("layout");
+        const ng = assignment.familyKey + "@@" + assignment.versionKey;
+        if (!versionGroups.has(ng)) versionGroups.set(ng, []);
+        versionGroups.get(ng).push(member);
+      }
+    }
+    const unhashed = members.filter((m) => !m.dHash);
+    if (unhashed.length) versionGroups.set(gid, unhashed);
+  }
+
+  const exemplars = [];
+  for (const members of versionGroups.values()) {
+    const hashed = members.find((m) => m.dHash && m.projV);
+    if (!hashed) continue;
+    const assignment = assignments.get(hashed.id);
+    exemplars.push({ file: hashed, familyKey: assignment.familyKey, versionKey: assignment.versionKey });
+  }
+
+  for (const file of weak) {
+    if (!file.dHash || !file.projV) {
+      if (settings.layoutComplete) assignments.set(file.id, { familyKey: "unsorted", versionKey: "loose", reasons: new Set() });
+      continue;
+    }
+    let best = null;
+    let bestAny = null;
+    for (const exemplar of exemplars) {
+      if (exemplar.file.sizeBucket !== file.sizeBucket) continue;
+      const ham = hamming(exemplar.file.dHash, file.dHash);
+      const proj = (cosine(exemplar.file.projV, file.projV) + cosine(exemplar.file.projH, file.projH)) / 2;
+      if (!bestAny || proj > bestAny.proj) bestAny = { exemplar, proj, ham };
+      if (ham <= settings.hashMax && proj >= settings.projMin && (!best || proj > best.proj)) best = { exemplar, proj, ham };
+    }
+    if (bestAny && state.debug.length < 30) {
+      state.debug.push({
+        file: file.name,
+        ham: Math.round(bestAny.ham * 1000) / 1000,
+        proj: Math.round(bestAny.proj * 1000) / 1000,
+        to: bestAny.exemplar.versionKey.slice(0, 42),
+        pass: !!best,
+      });
+    }
+    if (best) {
+      assignments.set(file.id, {
+        familyKey: best.exemplar.familyKey,
+        versionKey: "scan~" + best.exemplar.versionKey,
+        reasons: new Set(["layout"]),
+      });
+    } else {
+      file._weakBucket = (file.sizeBucket || "?") + "|" + (file.pageCount || 1);
+    }
+  }
+
+  const buckets = new Map();
+  for (const file of weak) {
+    if (assignments.has(file.id) || !file._weakBucket) continue;
+    if (!buckets.has(file._weakBucket)) buckets.set(file._weakBucket, []);
+    buckets.get(file._weakBucket).push(file);
+  }
+  for (const arr of buckets.values()) {
+    const clusters = layoutClusters(arr, settings);
+    for (const cluster of clusters) {
+      const familyKey = "layout:" + fnv((cluster.leader.projV || []).map((n) => Math.round(n * 4) / 4).join(",") + "|" + cluster.leader.sizeBucket);
+      const versionKey = "scan~p" + (cluster.leader.pageCount || 1);
+      for (const member of cluster.members) {
+        assignments.set(member.id, { familyKey, versionKey, reasons: new Set(["layout"]) });
+      }
+    }
+  }
+
+  for (const file of manual) {
+    assignments.set(file.id, {
+      familyKey: file.manualFamilyId,
+      versionKey: file.manualVersion || versionKeyFor(file),
+      reasons: new Set(["manual"]),
+    });
+  }
+  for (const file of junk) assignments.set(file.id, { familyKey: "junk", versionKey: "junk", reasons: new Set(["junk"]) });
+  for (const file of ejected) assignments.set(file.id, { familyKey: "unsorted", versionKey: "ejected", reasons: new Set() });
+
+  const groupsMap = new Map();
+  for (const file of active) {
+    if (file.outOfRange) {
+      pushGroup(groupsMap, file, { familyKey: "filtered", versionKey: "range", reasons: new Set() });
+      continue;
+    }
+    const assignment = assignments.get(file.id);
+    if (!assignment) continue;
+    pushGroup(groupsMap, file, assignment);
+  }
+  const q = files.filter((f) => f.quarantine);
+  if (q.length) {
+    groupsMap.set("quarantine", {
+      id: "quarantine",
+      familyKey: "quarantine",
+      versionKey: "bad",
+      members: q,
+      reasons: new Set(["bad"]),
+    });
+  }
+  const groups = [...groupsMap.values()];
+  for (const group of groups) group.versionLabel = labelVersion(group);
+  return { groups, assignments };
+}
+
+function pushGroup(map, file, assignment) {
+  const id = assignment.familyKey + "@@" + assignment.versionKey;
+  if (!map.has(id)) {
+    map.set(id, {
+      id,
+      familyKey: assignment.familyKey,
+      versionKey: assignment.versionKey,
+      members: [],
+      reasons: new Set(),
+    });
+  }
+  const group = map.get(id);
+  group.members.push(file);
+  for (const reason of assignment.reasons || []) group.reasons.add(reason);
+}
+
+function labelVersion(group) {
+  if (group.familyKey === "junk") return "covers and blanks";
+  if (group.familyKey === "unsorted") return "not this form";
+  if (group.familyKey === "filtered") return "outside page filter";
+  if (group.familyKey === "quarantine") return "could not open";
+  const key = group.versionKey || "";
+  if (key.startsWith("scan~")) {
+    const rev = key.match(/rev-[a-z0-9]+(?:-[a-z0-9]+)*/);
+    return rev ? "scan-" + rev[0] : "scan";
+  }
+  const revs = [...new Set(group.members.map((m) => m.revision).filter(Boolean))];
+  let core = revs.length === 1 ? versionSlug(revs[0]) : (group.members[0]?.pageCount || 1) + "p";
+  if (!core) core = "v1";
+  if (key.includes("~L")) {
+    const mark = key.split("~L").pop().slice(0, 4);
+    core = core + " · boxes " + mark;
+  }
+  if (group.members.some((m) => m.packet) && !key.startsWith("scan~") && !core.startsWith("packet")) core = "packet-" + core;
+  const allScans = group.members.length > 0 && group.members.every((m) => m.capture === "scan");
+  if (allScans && !core.startsWith("scan")) core = "scan-" + core;
+  return core;
+}
+
+function confidence(group) {
+  const reasons = group.reasons || new Set();
+  if (group.familyKey === "quarantine") return { level: "Low", why: "Password, corrupt, or unreadable" };
+  if (group.familyKey === "junk") return { level: "Review", why: "Looks like a cover or blank" };
+  if (group.familyKey === "unsorted") return { level: "Low", why: "Ejected or no match" };
+  if ((group.members?.length || 0) < 2 && !reasons.has("fields-exact")) return { level: "Low", why: "No sibling yet" };
+  if (reasons.has("fields-exact")) return { level: "High", why: "Identical field names" };
+  if (reasons.has("text") && reasons.has("layout")) return { level: "High", why: "Text and layout agree" };
+  if (reasons.has("text")) return { level: "High", why: "Header tokens overlap" };
+  if (reasons.has("fields-near")) return { level: "Review", why: "Similar field names" };
+  if (reasons.has("layout")) return { level: "Review", why: "Layout hash and line profile" };
+  if (reasons.has("manual")) return { level: "Review", why: "Moved by you" };
+  return { level: "Review", why: "Grouped" };
+}
+
+function selfCheck() {
+  const errors = [];
+  const eq = (cond, msg) => { if (!cond) errors.push(msg); };
+  const norm = normalizeText("Form W-9 Rev. 03/2018 Last Name: Okonkwo SSN 123-45-6789 Request for Taxpayer Identification", DEFAULTS);
+  eq(norm.revision === "03/2018", "revision extracted");
+  eq(!norm.tokens.includes("okonkwo"), "name stripped");
+  eq(norm.tokens.includes("taxpayer") && (norm.tokens.includes("w9") || norm.tokens.includes("w-9")), "form tokens kept");
+  eq(!norm.tokens.join(" ").includes("6789"), "ssn stripped");
+  const named = fillPattern(DEFAULTS.pattern, {
+    family: "w9", version: "rev-03-2018", lastname: "Ng", first: "", date: "", original: "scan",
+  }, 180);
+  eq(named === "w9_rev-03-2018_Ng_scan.pdf", "pattern collapsed blanks: " + named);
+
+  const base = {
+    didRead: true, fieldNames: [], fieldSig: "", tokens: [], revision: "", pageCount: 1,
+    capture: "digital", sizeBucket: "letter", dHash: null, projV: null, projH: null,
+    ejected: false, packet: false, realChars: 200, junkLikely: false,
+  };
+  const w9tok = "request taxpayer identification certification withholding exemption entity individual business classification certificate backup".split(" ");
+  const inTok = "client intake matter resident household employment referral language emergency disclosure representation residence".split(" ");
+  const f = (id, extra) => ({ ...base, id, ...extra });
+  const files = [
+    f("a", { fieldNames: ["LastName", "FirstName", "SSN", "Address", "City"], fieldSig: "Address|City|FirstName|LastName|SSN", tokens: w9tok, revision: "03/2018" }),
+    f("b", { fieldNames: ["LastName", "FirstName", "SSN", "Address", "City"], fieldSig: "Address|City|FirstName|LastName|SSN", tokens: w9tok, revision: "03/2018" }),
+    f("c", { fieldNames: ["AcctNo", "Addr", "City", "FirstNm", "LastNm", "TIN"], fieldSig: "AcctNo|Addr|City|FirstNm|LastNm|TIN", tokens: w9tok.concat(["digital", "assets", "foreign"]), revision: "03/2024" }),
+    f("d", { tokens: inTok, revision: "01/2021", fieldNames: ["ApplicantLast", "ApplicantFirst", "DOB"], fieldSig: "ApplicantFirst|ApplicantLast|DOB" }),
+    f("e", { tokens: inTok, revision: "01/2021", fieldNames: ["ApplicantLast", "ApplicantFirst", "DOB"], fieldSig: "ApplicantFirst|ApplicantLast|DOB" }),
+  ];
+  const { groups } = clusterFiles(files, { ...DEFAULTS, layoutComplete: true });
+  const live = groups.filter((g) => !["junk", "unsorted", "filtered", "quarantine"].includes(g.familyKey));
+  const fams = new Set(live.map((g) => g.familyKey));
+  eq(fams.size === 2, "w9 and intake are two families, got " + fams.size);
+  const w9 = live.filter((g) => (g.members[0].tokens || []).includes("taxpayer"));
+  eq(w9.length === 2, "w9 split into two versions, got " + w9.length);
+
+  const zeros = "0".repeat(64);
+  const ones = "1".repeat(64);
+  const projA = [1, 0, 0, 0, 0, 0, 0, 0];
+  const projB = [0, 1, 0, 0, 0, 0, 0, 0];
+  const cert = "certificate service certify served document persons completed delivery indicated filed clerk tribunal".split(" ");
+  const certs = [
+    f("c1", { tokens: cert, revision: "02/2016", dHash: zeros, projV: projA, projH: projA }),
+    f("c2", { tokens: cert, revision: "02/2016", dHash: zeros, projV: projA, projH: projA }),
+    f("c3", { tokens: cert, revision: "02/2016", dHash: ones, projV: projB, projH: projB }),
+    f("c4", { tokens: cert, revision: "02/2016", dHash: ones, projV: projB, projH: projB }),
+  ];
+  const certGroups = clusterFiles(certs, { ...DEFAULTS, layoutComplete: true }).groups.filter((g) => g.familyKey.startsWith("f:"));
+  eq(new Set(certGroups.map((g) => g.familyKey)).size === 1, "same title stays one family");
+  eq(certGroups.length === 2, "different boxes split versions, got " + certGroups.length);
+  return errors;
+}
+
+/* ---------- PDF bytes ---------- */
+
+function concatBytes(parts) {
+  let n = 0;
+  for (const p of parts) n += p.length;
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+
+function pdfDoc(objects, rootId, infoId) {
+  const header = enc.encode("%PDF-1.4\n%\xFF\xFF\xFF\xFF\n");
+  const chunks = [header];
+  const offsets = [0];
+  let pos = header.length;
+  for (let i = 1; i < objects.length; i++) {
+    const prefix = enc.encode(i + " 0 obj\n");
+    const suffix = enc.encode("\nendobj\n");
+    const body = objects[i];
+    offsets[i] = pos;
+    chunks.push(prefix, body, suffix);
+    pos += prefix.length + body.length + suffix.length;
+  }
+  let xref = "xref\n0 " + objects.length + "\n0000000000 65535 f \n";
+  for (let i = 1; i < objects.length; i++) xref += String(offsets[i]).padStart(10, "0") + " 00000 n \n";
+  xref += "trailer\n<< /Size " + objects.length + " /Root " + rootId + " 0 R /Info " + infoId + " 0 R >>\nstartxref\n" + pos + "\n%%EOF\n";
+  chunks.push(enc.encode(xref));
+  return concatBytes(chunks);
+}
+
+function escPdf(s) {
+  return String(s).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function buildTextPdf(spec) {
+  const W = 612, H = 792;
+  const pages = spec.pages;
+  let next = 4;
+  const pageIds = [];
+  const contentIds = [];
+  const widgets = [];
+  pages.forEach((page, pageIndex) => {
+    pageIds.push(next++);
+    contentIds.push(next++);
+    for (const field of page.fields || []) widgets.push({ ...field, id: next++, pageIndex });
+  });
+  const infoId = next++;
+  const objs = new Array(infoId + 1);
+  const fieldRefs = widgets.map((w) => w.id + " 0 R").join(" ");
+  const acro = widgets.length
+    ? " /AcroForm << /Fields [" + fieldRefs + "] /NeedAppearances true /DA (/Helv 10 Tf 0 g) /DR << /Font << /Helv 3 0 R >> >> >>"
+    : "";
+  objs[1] = enc.encode("<< /Type /Catalog /Pages 2 0 R" + acro + " >>");
+  objs[2] = enc.encode("<< /Type /Pages /Count " + pages.length + " /Kids [" + pageIds.map((id) => id + " 0 R").join(" ") + "] >>");
+  objs[3] = enc.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  pages.forEach((page, pi) => {
+    const mine = widgets.filter((w) => w.pageIndex === pi);
+    const annots = mine.length ? " /Annots [" + mine.map((w) => w.id + " 0 R").join(" ") + "]" : "";
+    objs[pageIds[pi]] = enc.encode("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 " + W + " " + H + "] /Contents " + contentIds[pi] + " 0 R /Resources << /Font << /F1 3 0 R /Helv 3 0 R >> >>" + annots + " >>");
+    let stream = "BT\n";
+    for (const line of page.lines || []) {
+      stream += "/F1 " + (line.size || 11) + " Tf\n1 0 0 1 " + line.x + " " + line.y + " Tm\n(" + escPdf(line.text) + ") Tj\n";
+    }
+    stream += "ET\n";
+    if (page.rects?.length) {
+      stream += (page.lineWidth || 2) + " w\n";
+      for (const rect of page.rects) stream += rect.x + " " + rect.y + " " + rect.w + " " + rect.h + " re S\n";
+    }
+    const sb = enc.encode(stream);
+    objs[contentIds[pi]] = concatBytes([enc.encode("<< /Length " + sb.length + " >>\nstream\n"), sb, enc.encode("endstream")]);
+  });
+  for (const w of widgets) {
+    const x2 = w.x + (w.w || 180);
+    const y2 = w.y + (w.h || 16);
+    objs[w.id] = enc.encode("<< /Type /Annot /Subtype /Widget /FT /Tx /T (" + escPdf(w.name) + ") /V (" + escPdf(w.value || "") + ") /Rect [" + w.x + " " + w.y + " " + x2 + " " + y2 + "] /P " + pageIds[w.pageIndex] + " 0 R /F 4 /DA (/Helv 10 Tf 0 g) >>");
+  }
+  objs[infoId] = enc.encode("<< /Producer (" + escPdf(spec.producer || "Quire") + ") /Title (" + escPdf(spec.title || "Form") + ") /Creator (" + escPdf(spec.creator || "Quire") + ") >>");
+  return pdfDoc(objs, 1, infoId);
+}
+
+function buildImagePdf(jpeg, imgW, imgH, title) {
+  const content = enc.encode("q\n612 0 0 792 0 0 cm\n/Im0 Do\nQ\n");
+  const dict = enc.encode("<< /Type /XObject /Subtype /Image /Width " + imgW + " /Height " + imgH + " /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length " + jpeg.length + " >>\nstream\n");
+  const objs = new Array(7);
+  objs[1] = enc.encode("<< /Type /Catalog /Pages 2 0 R >>");
+  objs[2] = enc.encode("<< /Type /Pages /Count 1 /Kids [3 0 R] >>");
+  objs[3] = enc.encode("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /XObject << /Im0 5 0 R >> >> >>");
+  objs[4] = concatBytes([enc.encode("<< /Length " + content.length + " >>\nstream\n"), content, enc.encode("endstream")]);
+  objs[5] = concatBytes([dict, jpeg, enc.encode("\nendstream")]);
+  objs[6] = enc.encode("<< /Producer (Quire Scan) /Title (" + escPdf(title || "scan") + ") >>");
+  return pdfDoc(objs, 1, 6);
+}
+
+function linesFrom(block, startY, size) {
+  return block.split("\n").filter((line) => line.trim()).map((text, i) => ({
+    text, x: 64, y: startY - i * ((size || 12) + 6), size: size || 12,
+  }));
+}
+
+const W9 = `Form W-9
+Request for Taxpayer Identification Number and Certification
+Give this form to the requester. Do not send it to the IRS.
+Name of entity or individual. Business name disregarded entity.
+Federal tax classification. Exemptions apply as marked.
+Address number and street. City state and ZIP code.
+Part I Taxpayer Identification Number
+Part II Certification
+Under penalties of perjury I declare that I have examined this certificate.
+Backup withholding applies. FATCA reporting code may be required.`;
+
+const W9B = W9 + "\nDigital assets question. Foreign partners disclosure. Line 3b.";
+
+const INTAKE = `Client Intake Sheet
+Matter information for the resident file.
+Household employment referral language preference.
+Emergency contact and employer are collected below.
+Disclosure of representation. Intake clerk initials.
+Residence history. Employment status. Referral source.`;
+
+const INTAKE_B = INTAKE + "\nRemote notarization acknowledgement for this intake.";
+
+const HIPAA = `HIPAA Notice of Privacy Practices Acknowledgement
+Protected health information may be used for treatment payment and healthcare operations.
+This acknowledgement confirms receipt of the privacy notice.
+Patient rights include access amendment and an accounting of disclosures.`;
+
+const REG = `Patient Registration
+Community clinic chart
+Guarantor pharmacy allergy primary physician
+Insurance subscriber relationship to the patient
+Last Name: NAME
+First Name: NAME`;
+
+const CERT = `Certificate of Service
+I certify that I served a copy of this document on the persons named below.
+Service was completed by mail and by hand delivery where indicated.
+This certificate is filed with the clerk of the tribunal.`;
+
+const EQUIP = `Equipment Checkout Log
+Tool crib custody card
+Serial asset assigned to a crew for the shift.
+Return condition noted by the crib clerk before closing.`;
+
+function personFields(person, spec) {
+  return spec.map((field) => ({ ...field, value: person[field.key] || "" }));
+}
+
+const PEOPLE = [
+  { LastName: "Okonkwo", FirstName: "Amina", SSN: "123-45-6789", Address: "14 Pearl St", City: "Denver CO", LastNm: "Okonkwo", FirstNm: "Amina", TIN: "123-45-6789", Addr: "14 Pearl St", AcctNo: "441", ApplicantLast: "Okonkwo", ApplicantFirst: "Amina", DOB: "03/12/1988", CaseID: "C-100234", PatientName: "Amina Okonkwo", DateSigned: "03/12/2024", NAME: "Okonkwo" },
+  { LastName: "Alvarez", FirstName: "Luis", SSN: "234-56-7890", Address: "88 Canyon", City: "Pueblo CO", LastNm: "Alvarez", FirstNm: "Luis", TIN: "234-56-7890", Addr: "88 Canyon", AcctNo: "442", ApplicantLast: "Alvarez", ApplicantFirst: "Luis", DOB: "11/02/1991", CaseID: "C-100881", PatientName: "Luis Alvarez", DateSigned: "11/02/2023", NAME: "Alvarez" },
+  { LastName: "Bergstrom", FirstName: "Helen", SSN: "345-67-8901", Address: "2 Pine", City: "Boulder CO", LastNm: "Bergstrom", FirstNm: "Helen", TIN: "345-67-8901", Addr: "2 Pine", AcctNo: "443", ApplicantLast: "Bergstrom", ApplicantFirst: "Helen", DOB: "01/19/1977", CaseID: "C-100902", PatientName: "Helen Bergstrom", DateSigned: "01/19/2025", NAME: "Bergstrom" },
+  { LastName: "Ng", FirstName: "Jon", SSN: "456-78-9012", Address: "9 Market", City: "Aurora CO", LastNm: "Ng", FirstNm: "Jon", TIN: "456-78-9012", Addr: "9 Market", AcctNo: "444", ApplicantLast: "Ng", ApplicantFirst: "Jon", DOB: "07/30/1982", CaseID: "C-100114", PatientName: "Jon Ng", DateSigned: "07/30/2022", NAME: "Ng" },
+  { LastName: "Shah", FirstName: "Priya", SSN: "567-89-0123", Address: "70 York", City: "Denver CO", LastNm: "Shah", FirstNm: "Priya", TIN: "567-89-0123", Addr: "70 York", AcctNo: "445", ApplicantLast: "Shah", ApplicantFirst: "Priya", DOB: "05/14/1994", CaseID: "C-100640", PatientName: "Priya Shah", DateSigned: "05/14/2024", NAME: "Shah" },
+  { LastName: "Moretti", FirstName: "Evan", SSN: "678-90-1234", Address: "5 River", City: "Golden CO", LastNm: "Moretti", FirstNm: "Evan", TIN: "678-90-1234", Addr: "5 River", AcctNo: "446", ApplicantLast: "Moretti", ApplicantFirst: "Evan", DOB: "09/09/1986", CaseID: "C-100333", PatientName: "Evan Moretti", DateSigned: "09/09/2021", NAME: "Moretti" },
+];
+
+function textFile(spec) {
+  const person = spec.person || PEOPLE[0];
+  const body = (spec.body || "").replaceAll("NAME", person.NAME || person.LastName || "");
+  const fields = personFields(person, spec.fields || []);
+  return buildTextPdf({
+    title: spec.title,
+    producer: spec.producer || "Quire Sample",
+    creator: spec.creator || "Quire",
+    pages: [{
+      lines: linesFrom((spec.revLine || "") + "\n" + body, 740, 12),
+      fields: fields.map((field, i) => ({ name: field.name, value: field.value, x: 64 + (i % 2) * 250, y: 430 - Math.floor(i / 2) * 36 })),
+      rects: spec.rects || [],
+      lineWidth: spec.lineWidth || 2,
+    }],
+  });
+}
+
+function w9Rects(extra) {
+  const boxes = [];
+  for (let i = 0; i < 9; i++) boxes.push({ x: 64 + i * 28 + (i > 2 ? 12 : 0) + (i > 4 ? 12 : 0), y: 470, w: 22, h: 22 });
+  const rects = [{ x: 48, y: 700, w: 516, h: 8 }, ...boxes, { x: 64, y: 250, w: 480, h: 18 }, { x: 64, y: 210, w: 480, h: 18 }];
+  if (extra) rects.push({ x: 64, y: 120, w: 480, h: 64 });
+  return rects;
+}
+function intakeRects() {
+  return [{ x: 36, y: 64, w: 26, h: 680 }, { x: 80, y: 500, w: 210, h: 90 }, { x: 310, y: 500, w: 210, h: 90 }, { x: 80, y: 380, w: 440, h: 70 }];
+}
+function hipaaRects() {
+  return [{ x: 70, y: 70, w: 470, h: 650 }];
+}
+function regRects() {
+  const rects = [{ x: 64, y: 690, w: 480, h: 36 }];
+  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) rects.push({ x: 64 + c * 120, y: 200 + r * 48, w: 108, h: 36 });
+  return rects;
+}
+  function packetFile(person) {
+  const cover = linesFrom("FACSIMILE COVER SHEET\nDocuments follow this page", 740, 14);
+  const intake = linesFrom("Rev. 01/2021\n" + INTAKE, 740, 12);
+  const fields = personFields(person, [
+    { name: "ApplicantLast", key: "ApplicantLast" },
+    { name: "ApplicantFirst", key: "ApplicantFirst" },
+    { name: "DOB", key: "DOB" },
+    { name: "CaseID", key: "CaseID" },
+  ]).map((field, i) => ({ name: field.name, value: field.value, x: 80, y: 460 - i * 28 }));
+  return buildTextPdf({
+    title: "Packet",
+    producer: "Quire Sample",
+    pages: [
+      { lines: cover, fields: [] },
+      { lines: intake, fields, rects: intakeRects() },
+    ],
+  });
+}
+
+/* ---------- pdf.js, image fingerprints, OCR ---------- */
+
+let pdfjsLib = null;
+let pdfSource = "local";
+
+function fontBase() {
+  if (pdfSource === "cdn") return "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/standard_fonts/";
+  return new URL("vendor/pdfjs/standard_fonts/", document.baseURI).href;
+}
+
+async function loadPdfJs() {
+  if (pdfjsLib) return pdfjsLib;
+  const pairs = [
+    [new URL("vendor/pdfjs/pdf.min.mjs", document.baseURI).href, new URL("vendor/pdfjs/pdf.worker.min.mjs", document.baseURI).href, "local"],
+    ["https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs", "https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs", "cdn"],
+  ];
+  let last;
+  for (const [src, worker, kind] of pairs) {
+    try {
+      const lib = await import(src);
+      lib.GlobalWorkerOptions.workerSrc = worker;
+      pdfjsLib = lib;
+      pdfSource = kind;
+      return lib;
+    } catch (err) {
+      last = err;
+    }
+  }
+  throw last || new Error("pdf.js failed to load");
+}
+
+function classifyError(err) {
+  const name = err?.name || "";
+  const msg = String(err?.message || err);
+  if (name === "PasswordException" || /password/i.test(msg)) return "Password protected";
+  if (/not a pdf/i.test(msg)) return "Not a PDF";
+  if (name === "InvalidPDFException" || /invalid pdf/i.test(msg)) return "Corrupt or not a PDF";
+  return msg.slice(0, 180);
+}
+
+function textOf(content) {
+  let out = "";
+  let lastY = null;
+  for (const item of content.items || []) {
+    if (!item.str) continue;
+    const y = item.transform ? item.transform[5] : null;
+    if (lastY != null && y != null && Math.abs(y - lastY) > 2) out += "\n";
+    else if (out && !out.endsWith("\n") && !out.endsWith(" ")) out += " ";
+    out += item.str;
+    lastY = y;
+  }
+  return out;
+}
+
+async function readCheap(file) {
+  const src = state.sources.get(file.id);
+  if (!src?.file) throw new Error("File bytes are not loaded. Reopen the folder.");
+  const buf = await src.file.arrayBuffer();
+  const head = new TextDecoder("latin1").decode(new Uint8Array(buf.slice(0, 16)));
+  if (!head.includes("%PDF-")) throw new Error("Not a PDF");
+  file.pdfVersion = (head.match(/%PDF-(\d+\.\d+)/) || [])[1] || "";
+  const lib = await loadPdfJs();
+  const pdf = await lib.getDocument({ data: new Uint8Array(buf), standardFontDataUrl: fontBase(), disableAutoFetch: true }).promise;
+  try {
+    file.pageCount = pdf.numPages;
+    const meta = await pdf.getMetadata().catch(() => null);
+    file.producer = String(meta?.info?.Producer || "");
+    file.creator = String(meta?.info?.Creator || "");
+    const limit = Math.min(pdf.numPages, 6);
+    const pageTexts = [];
+    const sizes = [];
+    for (let i = 1; i <= limit; i++) {
+      const page = await pdf.getPage(i);
+      const vp = page.getViewport({ scale: 1 });
+      if (i <= 3) sizes.push({ w: Math.round(vp.width), h: Math.round(vp.height) });
+      pageTexts.push(textOf(await page.getTextContent()));
+      page.cleanup();
+    }
+    file.pageSizes = sizes;
+    const box = sizes[0] || { w: 612, h: 792 };
+    file.sizeBucket = sizeBucket(box.w, box.h);
+    file.aspect = Math.round((box.w / box.h) * 1000) / 1000;
+    const names = [];
+    const values = {};
+    const types = {};
+    let fieldMap = null;
+    try { fieldMap = await pdf.getFieldObjects(); } catch { fieldMap = null; }
+    if (fieldMap) {
+      for (const [name, arr] of Object.entries(fieldMap)) {
+        if (!name) continue;
+        const item = (arr && arr[0]) || {};
+        names.push(name);
+        types[name] = item.type || "";
+        if (item.value != null && String(item.value).trim()) values[name] = String(item.value).trim();
+      }
+    }
+    if (!names.length) {
+      for (let i = 1; i <= Math.min(4, pdf.numPages); i++) {
+        const page = await pdf.getPage(i);
+        const annots = await page.getAnnotations();
+        for (const annot of annots) {
+          if (!annot.fieldName) continue;
+          names.push(annot.fieldName);
+          types[annot.fieldName] = annot.fieldType || "";
+          if (annot.fieldValue) values[annot.fieldName] = String(annot.fieldValue);
+        }
+        page.cleanup();
+      }
+    }
+    file.fieldNames = [...new Set(names)].sort();
+    file.fieldTypes = types;
+    file.fieldValues = values;
+    file.fieldSig = file.fieldNames.join("|");
+    const norms = pageTexts.map((t) => normalizeText(t, state.settings));
+    let best = 0;
+    for (let i = 1; i < norms.length; i++) if (norms[i].tokens.length > norms[best].tokens.length) best = i;
+    file.dominantPage = best + 1;
+    file.packet = false;
+    if (norms.length >= 2 && best !== 0) {
+      const jac = jaccardSets(norms[0].tokens, norms[best].tokens);
+      if ((norms[0].realChars < 50 && norms[best].realChars >= 40) || (norms[best].tokens.length >= 8 && jac < 0.35)) file.packet = true;
+    }
+    const ident = norms[best] || { tokens: [], revision: "", realChars: 0 };
+    file.tokens = ident.tokens;
+    file.revision = norms.map((n) => n.revision).find(Boolean) || "";
+    file.realChars = Math.max(0, ...norms.map((n) => n.realChars));
+    file.rawText = (pageTexts[best] || "").slice(0, 2500);
+    file.snippet = (pageTexts[best] || "").replace(/\s+/g, " ").trim().slice(0, 160);
+    file.junkLikely = looksJunk(file);
+    file.capture = file.fieldNames.length >= 2 ? "fillable" : file.realChars >= state.settings.ocrTriggerChars ? "digital" : "scan";
+    file.outOfRange = file.pageCount < state.settings.minPages || file.pageCount > state.settings.maxPages;
+    file.didRead = true;
+  } finally {
+    await pdf.destroy().catch(() => {});
+  }
+}
+
+function downscale(canvas, width) {
+  const scale = Math.min(1, width / canvas.width);
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(canvas.width * scale));
+  c.height = Math.max(1, Math.round(canvas.height * scale));
+  c.getContext("2d").drawImage(canvas, 0, 0, c.width, c.height);
+  return c;
+}
+
+function rotateCanvas(canvas, deg) {
+  if (!deg) return canvas;
+  const c = document.createElement("canvas");
+  c.width = canvas.width;
+  c.height = canvas.height;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.translate(c.width / 2, c.height / 2);
+  ctx.rotate((deg * Math.PI) / 180);
+  ctx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
+  return c;
+}
+
+function rowVariance(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let mean = 0;
+  const rows = new Float32Array(height);
+  for (let y = 0; y < height; y++) {
+    let s = 0;
+    for (let x = 0; x < width; x += 3) {
+      const i = (y * width + x) * 4;
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (lum < 176) s += 176 - lum;
+    }
+    rows[y] = s;
+    mean += s;
+  }
+  mean /= height || 1;
+  let v = 0;
+  for (let y = 0; y < height; y++) {
+    const d = rows[y] - mean;
+    v += d * d;
+  }
+  return v;
+}
+
+function deskew(canvas, maxDeg) {
+  const max = Math.max(0, Math.min(8, maxDeg | 0));
+  if (!max) return canvas;
+  const small = downscale(canvas, 220);
+  let bestA = 0;
+  let bestV = -1;
+  for (let a = -max; a <= max; a++) {
+    const v = rowVariance(rotateCanvas(small, a));
+    if (v > bestV) { bestV = v; bestA = a; }
+  }
+  return bestA ? rotateCanvas(canvas, bestA) : canvas;
+}
+
+function cropMargins(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data, width, height } = image;
+  let minX = width, minY = height, maxX = 0, maxY = 0;
+  for (let y = 0; y < height; y += 2) {
+    for (let x = 0; x < width; x += 2) {
+      const i = (y * width + x) * 4;
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (lum < 185) {
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX <= minX + 8 || maxY <= minY + 8) return canvas;
+  const pad = 4;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(width - 1, maxX + pad);
+  maxY = Math.min(height - 1, maxY + pad);
+  const c = document.createElement("canvas");
+  c.width = maxX - minX + 1;
+  c.height = maxY - minY + 1;
+  c.getContext("2d").drawImage(canvas, minX, minY, c.width, c.height, 0, 0, c.width, c.height);
+  return c;
+}
+
+function dHash(canvas) {
+  const c = document.createElement("canvas");
+  c.width = 9;
+  c.height = 8;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, 9, 8);
+  ctx.drawImage(canvas, 0, 0, 9, 8);
+  const d = ctx.getImageData(0, 0, 9, 8).data;
+  let bits = "";
+  for (let y = 0; y < 8; y++) {
+    for (let x = 0; x < 8; x++) {
+      const i = (y * 9 + x) * 4;
+      const j = i + 4;
+      const a = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      const b = 0.299 * d[j] + 0.587 * d[j + 1] + 0.114 * d[j + 2];
+      bits += a < b ? "1" : "0";
+    }
+  }
+  return bits;
+}
+
+function projections(canvas) {
+  const bins = 32;
+  const small = downscale(canvas, 180);
+  const ctx = small.getContext("2d", { willReadFrequently: true });
+  const { data, width, height } = ctx.getImageData(0, 0, small.width, small.height);
+  const v = Array(bins).fill(0);
+  const h = Array(bins).fill(0);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const ink = lum < 176 ? (176 - lum) / 176 : 0;
+      if (!ink) continue;
+      v[Math.min(bins - 1, (x / width) * bins | 0)] += ink;
+      h[Math.min(bins - 1, (y / height) * bins | 0)] += ink;
+    }
+  }
+  const norm = (arr) => {
+    const max = Math.max(...arr, 1e-6);
+    return arr.map((n) => Math.round((n / max) * 1000) / 1000);
+  };
+  const vn = norm(v);
+  return { v: vn, h: norm(h), ink: vn.reduce((s, n) => s + n, 0) / bins };
+}
+
+function makeThumb(canvas) {
+  const c = document.createElement("canvas");
+  c.width = 200;
+  c.height = Math.max(1, Math.round(canvas.height * (200 / canvas.width)));
+  const ctx = c.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(canvas, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.62);
+}
+
+async function fingerprintPage(pdf, pageNo, settings) {
+  const page = await pdf.getPage(pageNo);
+  const base = page.getViewport({ scale: 1 });
+  const scale = Math.min((settings.dpi || 72) / 72, 640 / base.width);
+  const vp = page.getViewport({ scale });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.floor(vp.width));
+  canvas.height = Math.max(1, Math.floor(vp.height));
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  await page.render({ canvasContext: ctx, viewport: vp }).promise;
+  page.cleanup();
+  const fixed = cropMargins(deskew(canvas, settings.skewDeg));
+  const proj = projections(fixed);
+  const band = Math.max(24, Math.round(fixed.height * (settings.headerBand || 0.22)));
+  const header = document.createElement("canvas");
+  header.width = fixed.width;
+  header.height = band;
+  header.getContext("2d").drawImage(fixed, 0, 0, fixed.width, band, 0, 0, fixed.width, band);
+  return { dHash: dHash(fixed), projV: proj.v, projH: proj.h, ink: proj.ink, thumb: makeThumb(fixed), header };
+}
+
+const headerCache = new Map();
+
+async function renderOne(file) {
+  const src = state.sources.get(file.id);
+  if (!src?.file) {
+    file.didLayout = true;
+    file.layoutError = "Source not in memory";
+    return;
+  }
+  const buf = await src.file.arrayBuffer();
+  const lib = await loadPdfJs();
+  const pdf = await lib.getDocument({ data: new Uint8Array(buf), standardFontDataUrl: fontBase(), disableAutoFetch: true }).promise;
+  try {
+    const fp = await fingerprintPage(pdf, file.dominantPage || 1, state.settings);
+    file.dHash = fp.dHash;
+    file.projV = fp.projV;
+    file.projH = fp.projH;
+    file.ink = fp.ink;
+    file.didLayout = true;
+    file.junkLikely = looksJunk(file);
+    state.thumbs.set(file.id, fp.thumb);
+    if ((file.realChars || 0) < state.settings.ocrTriggerChars) headerCache.set(file.id, fp.header);
+    void kvSet("thumb:" + file.id, fp.thumb);
+  } finally {
+    await pdf.destroy().catch(() => {});
+  }
+}
+
+let tessLoader = null;
+async function loadTesseract() {
+  if (window.Tesseract) return window.Tesseract;
+  if (tessLoader) return tessLoader;
+  tessLoader = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    script.onload = () => resolve(window.Tesseract);
+    script.onerror = () => reject(new Error("Tesseract failed to load"));
+    document.head.appendChild(script);
+  });
+  return tessLoader;
+}
+
+let tessWorker = null;
+let tessLang = "";
+async function ocrCanvas(canvas, lang) {
+  const Tesseract = await loadTesseract();
+  if (!tessWorker || tessLang !== lang) {
+    if (tessWorker) await tessWorker.terminate().catch(() => {});
+    tessWorker = await Tesseract.createWorker(lang || "eng");
+    tessLang = lang || "eng";
+  }
+  const result = await Promise.race([
+    tessWorker.recognize(canvas),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("OCR timed out")), 25000)),
+  ]);
+  return result?.data?.text || "";
+}
+
+/* ---------- pipeline ---------- */
+
+function yieldTick() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function pool(items, n, fn) {
+  let cursor = 0;
+  const width = Math.max(1, Math.min(4, n || 2));
+  async function worker() {
+    while (!state.pause) {
+      const index = cursor++;
+      if (index >= items.length) return;
+      try { await fn(items[index], index); }
+      catch (err) { logActivity((items[index]?.name || "File") + " — " + (err.message || err)); }
+      if (index % 2 === 0) {
+        paintStatus();
+        await yieldTick();
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: width }, worker));
+}
+
+function recluster() {
+  const result = clusterFiles(state.files, { ...state.settings, layoutComplete: state.layoutComplete });
+  state.groups = result.groups;
+  for (const group of state.groups) {
+    const hint = group.familyKey === "junk" ? "junk"
+      : group.familyKey === "unsorted" ? "unsorted"
+        : group.familyKey === "quarantine" ? "quarantine"
+          : group.familyKey === "filtered" ? "filtered"
+            : suggestSlug(familyMembers(group.familyKey));
+    const meta = ensureMeta(group.familyKey, hint);
+    if (!meta.slugTouched) meta.slug = hint;
+  }
+}
+
+function familyMembers(familyKey) {
+  return state.groups.filter((g) => g.familyKey === familyKey).flatMap((g) => g.members);
+}
+
+async function stageRead() {
+  const todo = state.files.filter((f) => !f.didRead && !f.quarantine);
+  state.phase = "Reading inventory, fields, and text";
+  await pool(todo, state.settings.workers, async (file) => {
+    state.phase = "Reading " + file.name;
+    try { await readCheap(file); }
+    catch (err) {
+      file.quarantine = classifyError(err);
+      file.didRead = true;
+      logActivity(file.name + " — " + file.quarantine);
+    }
+  });
+}
+
+function layoutCandidates() {
+  const preview = clusterFiles(state.files, { ...state.settings, layoutComplete: false });
+  const ids = new Set();
+  for (const group of preview.groups) {
+    if (["junk", "unsorted", "filtered", "quarantine"].includes(group.familyKey)) continue;
+    const fieldBacked = group.members.some((m) => (m.fieldNames?.length || 0) >= 2);
+    const pending = group.members.filter((m) => !m.didLayout && !m.junkLikely && !m.quarantine);
+    if (!pending.length) continue;
+    if (fieldBacked && state.settings.trustFields) ids.add(pending[0].id);
+    else pending.slice(0, pending.length <= 40 ? pending.length : state.settings.layoutSample || 8).forEach((m) => ids.add(m.id));
+  }
+  const leftovers = state.files.filter((f) =>
+    f.didRead && !f.quarantine && !f.didLayout && !f.junkLikely && !f.ejected && !f.outOfRange && !isStrong(f, state.settings) && !ids.has(f.id),
+  );
+  return {
+    priority: state.files.filter((f) => ids.has(f.id)),
+    leftovers,
+  };
+}
+
+async function stageLayout() {
+  const plan = layoutCandidates();
+  state.phase = "Layout fingerprints";
+  await pool(plan.priority, Math.min(2, state.settings.workers), async (file) => {
+    state.phase = "Layout " + file.name;
+    try { await renderOne(file); }
+    catch (err) {
+      file.didLayout = true;
+      file.layoutError = String(err.message || err).slice(0, 160);
+      logActivity("Layout skipped " + file.name);
+    }
+  });
+  if (state.pause) return;
+  const doneScans = state.files.filter((f) => f.didLayout && f.capture === "scan").length;
+  const room = Math.max(0, (state.imageBudget ?? state.settings.imageSampleFirst) - doneScans);
+  const slice = plan.leftovers.slice(0, room);
+  await pool(slice, Math.min(2, state.settings.workers), async (file) => {
+    state.phase = "Layout " + file.name;
+    try { await renderOne(file); }
+    catch (err) {
+      file.didLayout = true;
+      file.layoutError = String(err.message || err).slice(0, 160);
+    }
+  });
+  if (plan.leftovers.length > slice.length) {
+    state.sampleHold = true;
+    state.layoutComplete = false;
+    logActivity("Rendered " + slice.length + " image-only files. " + (plan.leftovers.length - slice.length) + " still waiting.");
+    return;
+  }
+  state.sampleHold = false;
+  state.layoutComplete = true;
+}
+
+async function stageOcr() {
+  const todo = state.files.filter((f) => f.didRead && !f.quarantine && !f.didOcr && !f.junkLikely && (f.realChars || 0) < state.settings.ocrTriggerChars);
+  if (!todo.length) {
+    for (const file of state.files) if ((file.realChars || 0) >= state.settings.ocrTriggerChars) file.didOcr = true;
+    return;
+  }
+  state.phase = "OCR headers";
+  let failed = false;
+  for (const file of todo) {
+    if (state.pause) return;
+    if (failed) { file.didOcr = true; file.ocrError = "skipped"; continue; }
+    state.phase = "OCR " + file.name;
+    paintStatus();
+    try {
+      let canvas = state.settings.ocrHeaderOnly ? headerCache.get(file.id) : null;
+      if (!canvas) {
+        const src = state.sources.get(file.id);
+        if (!src?.file) throw new Error("missing bytes");
+        const lib = await loadPdfJs();
+        const pdf = await lib.getDocument({ data: new Uint8Array(await src.file.arrayBuffer()), standardFontDataUrl: fontBase() }).promise;
+        try {
+          const fp = await fingerprintPage(pdf, file.dominantPage || 1, state.settings);
+          canvas = state.settings.ocrHeaderOnly ? fp.header : null;
+          if (!file.dHash) {
+            file.dHash = fp.dHash; file.projV = fp.projV; file.projH = fp.projH; file.didLayout = true;
+            state.thumbs.set(file.id, fp.thumb);
+          }
+          if (!state.settings.ocrHeaderOnly) {
+            canvas = document.createElement("canvas");
+            /* full page already shrunk inside fingerprint; header-only is the default */
+            canvas = fp.header;
+          }
+        } finally { await pdf.destroy().catch(() => {}); }
+      }
+      const text = await ocrCanvas(canvas, state.settings.ocrLang);
+      const norm = normalizeText(text, state.settings);
+      file.ocrText = text.slice(0, 500);
+      file.didOcr = true;
+      if (!file.rawText) file.rawText = text.slice(0, 2500);
+      let bestJac = 0;
+      for (const other of state.files) {
+        if (other.id === file.id || (other.realChars || 0) < state.settings.ocrTriggerChars) continue;
+        bestJac = Math.max(bestJac, jaccardSets(norm.tokens, other.tokens));
+      }
+      if (norm.tokens.length >= state.settings.textPlaceMinTokens && bestJac >= state.settings.textJaccard) {
+        file.tokens = norm.tokens;
+        if (!file.revision && norm.revision) file.revision = norm.revision;
+      } else if (!file.revision && norm.revision && bestJac >= 0.3) file.revision = norm.revision;
+    } catch (err) {
+      failed = true;
+      file.didOcr = true;
+      file.ocrError = String(err.message || err).slice(0, 160);
+      logActivity("OCR stopped: " + file.ocrError);
+    }
+    await yieldTick();
+  }
+  headerCache.clear();
+}
+
+async function runPipeline() {
+  if (state.running) return;
+  if (!state.files.length) {
+    setBanner("Add PDFs or load the sample library first.");
+    return;
+  }
+  state.running = true;
+  state.pause = false;
+  setBanner("");
+  paint();
+  try {
+    await stageRead();
+    if (state.pause) return;
+    recluster();
+    paint();
+    await stageLayout();
+    recluster();
+    paint();
+    if (state.pause || state.sampleHold) return;
+    await stageOcr();
+    if (state.pause) return;
+    recluster();
+  } catch (err) {
+    logActivity("Pipeline stopped: " + (err.message || err));
+  } finally {
+    state.running = false;
+    state.phase = state.sampleHold ? "Waiting before the rest of the image pass" : "Ready for review";
+    primeAll();
+    await saveSession();
+    paint();
+  }
+}
+
+/* ---------- names ---------- */
+
+function ensureMeta(familyKey, hint) {
+  if (!state.meta[familyKey]) state.meta[familyKey] = { slug: hint || "", slugTouched: false, fieldMap: null, confirmed: {} };
+  return state.meta[familyKey];
+}
+
+function blankMap() {
+  return { lastname: { mode: "blank" }, first: { mode: "blank" }, date: { mode: "blank" }, case: { mode: "blank" } };
+}
+
+function ensureMap(meta) {
+  if (!meta.fieldMap) meta.fieldMap = blankMap();
+  for (const [slot] of SLOT_DEFS) if (!meta.fieldMap[slot]) meta.fieldMap[slot] = { mode: "blank" };
+  return meta.fieldMap;
+}
+
+function presetMap(members) {
+  const names = new Set(members.flatMap((m) => m.fieldNames || []));
+  for (const row of PRESET_MAPS) {
+    const need = String(row.match || "").split("|").map((part) => part.trim()).filter(Boolean);
+    if (!need.length || !need.every((name) => names.has(name))) continue;
+    const slot = (key) => (key ? { mode: "field", key } : { mode: "blank" });
+    return { lastname: slot(row.lastname), first: slot(row.first), date: slot(row.date), case: slot(row.case) };
+  }
+  return null;
+}
+
+function fieldExamples(members, name) {
+  const vals = [];
+  for (const member of members) {
+    const value = (member.fieldValues || {})[name];
+    if (value && !vals.includes(value)) vals.push(value);
+    if (vals.length >= 3) break;
+  }
+  return vals;
+}
+
+function slotSource(map, slot) {
+  const spec = map?.[slot];
+  if (!spec || spec.mode === "blank") return "Not mapped";
+  if (spec.mode === "field") return spec.key;
+  if (spec.mode === "regex") return "Text pattern";
+  return "Not mapped";
+}
+
+function slotSample(members, map, slot) {
+  for (const file of members) {
+    const idn = identityOf(file, map, state.settings);
+    const value = slot === "lastname" ? idn.lastname : slot === "first" ? idn.first : slot === "date" ? idn.date : idn.case;
+    if (value) return value;
+  }
+  return "—";
+}
+
+function familyGroups(familyKey) {
+  return state.groups.filter((group) => group.familyKey === familyKey);
+}
+
+function primeFamily(familyKey) {
+  const members = familyMembers(familyKey);
+  if (!members.some((member) => member.didRead)) return;
+  const meta = ensureMeta(familyKey, suggestSlug(members));
+  if (!meta.fieldMap) meta.fieldMap = presetMap(members) || guessMap(members);
+}
+
+function primeAll() {
+  const keys = [...new Set(reviewGroups().map((group) => group.familyKey))];
+  for (const key of keys) primeFamily(key);
+  const ready = reviewGroups().filter((group) => group.members.some((member) => member.didRead));
+  if (ready.length) suggestNames(ready, { silent: true });
+}
+
+function applyMap(group, slot, spec) {
+  const members = familyMembers(group.familyKey);
+  const meta = ensureMeta(group.familyKey, suggestSlug(members));
+  const map = ensureMap(meta);
+  map[slot] = spec;
+  if (spec.mode === "field") {
+    for (const [other] of SLOT_DEFS) {
+      if (other !== slot && map[other]?.mode === "field" && map[other].key === spec.key) map[other] = { mode: "blank" };
+    }
+  }
+  suggestNames(familyGroups(group.familyKey), { silent: true });
+}
+
+function guessMap(members) {
+  const names = [...new Set(members.flatMap((m) => m.fieldNames || []))];
+  const variance = (name) => new Set(members.map((m) => (m.fieldValues || {})[name] || "").filter(Boolean).map((v) => v.toLowerCase())).size;
+  const pick = (re) => names.filter((n) => re.test(n) && !/ssn|tin|taxid/i.test(n)).sort((a, b) => variance(b) - variance(a))[0] || "";
+  const last = pick(/last|surname|lname/i) || pick(/^name$/i);
+  const first = pick(/first|given|fname/i);
+  const date = pick(/dob|date|signed/i);
+  const caseId = pick(/case|matter|fileno|file.?no|docket/i);
+  const slot = (key) => key ? { mode: "field", key } : { mode: "blank" };
+  return { lastname: slot(last), first: slot(first), date: slot(date), case: slot(caseId) };
+}
+
+function slotValue(file, spec, regexes, slot) {
+  const values = file.fieldValues || {};
+  if (spec?.mode === "regex" && spec.pattern) {
+    try {
+      const match = new RegExp(spec.pattern, "i").exec(file.rawText || "");
+      return ((match && (match[1] || match[0])) || "").trim();
+    } catch { return ""; }
+  }
+  if (spec?.mode === "blank") {
+    /* still try this file's own fields before regex */
+  } else if (spec?.mode === "field" && spec.key && values[spec.key]) return values[spec.key];
+  const slotRe = {
+    lastname: /last|surname|lname/i,
+    first: /first|given|fname/i,
+    date: /dob|date|signed/i,
+    case: /case|matter|fileno|docket/i,
+  }[slot];
+  if (slotRe) {
+    const hit = (file.fieldNames || []).find((name) => slotRe.test(name) && !/ssn|tin|taxid/i.test(name) && values[name]);
+    if (hit) return values[hit];
+  }
+  if (spec?.mode === "field") return "";
+  for (const re of regexes || []) {
+    const match = re.exec(file.rawText || "");
+    if (match) return (match[1] || "").trim();
+  }
+  return "";
+}
+
+function identityOf(file, map, settings) {
+  const raw = file.rawText || "";
+  const withoutRev = raw.replace(/\brev(?:ision)?\.?\s*[:#]?\s*\d{1,2}[\/.\-]\d{2,4}/i, " ");
+  const dateHit = withoutRev.match(/\b(\d{4}-\d{2}-\d{2}|\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4})\b/);
+  let dateRaw = slotValue(file, map?.date, [], "date");
+  if (!dateRaw && dateHit) dateRaw = dateHit[1];
+  if (!dateRaw && settings.useMtime && file.mtime) dateRaw = new Date(file.mtime).toISOString();
+  const date = formatDate(parseLooseDate(dateRaw) || (settings.useMtime ? new Date(file.mtime) : null), settings.dateFormat, settings.timeZone);
+  return {
+    lastname: slotValue(file, map?.lastname, [/\blast\s*name[:\s]+([A-Za-z][A-Za-z'’\-]{1,40})/i], "lastname"),
+    first: slotValue(file, map?.first, [/\bfirst\s*name[:\s]+([A-Za-z][A-Za-z'’\-]{1,40})/i], "first"),
+    date,
+    case: slotValue(file, map?.case, [/\bcase(?:\s*id|\s*no\.?)?[:\s#]+([A-Za-z0-9-]{3,20})/i], "case"),
+  };
+}
+
+function baseName(name) {
+  return String(name || "file").replace(/\.pdf$/i, "");
+}
+
+function uniqueName(name, used, selfName, collision) {
+  const taken = new Set(used);
+  if (selfName) taken.delete(selfName.toLowerCase());
+  if (!taken.has(name.toLowerCase())) return name;
+  if (collision === "skip") return "";
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const ext = dot > 0 ? name.slice(dot) : "";
+  let i = 2;
+  while (taken.has((stem + "-" + i + ext).toLowerCase()) && i < 5000) i++;
+  return stem + "-" + i + ext;
+}
+
+function reviewGroups() {
+  return state.groups.filter((g) => !["quarantine", "unsorted", "filtered"].includes(g.familyKey));
+}
+
+function suggestNames(groups, opts) {
+  const used = new Set(state.files.map((f) => (f.name || "").toLowerCase()));
+  for (const group of groups) {
+    const members = familyMembers(group.familyKey);
+    const meta = ensureMeta(group.familyKey, suggestSlug(members));
+    if (!meta.fieldMap) meta.fieldMap = presetMap(members) || guessMap(members);
+    for (const file of group.members) {
+      const idn = identityOf(file, meta.fieldMap, state.settings);
+      file.identity = idn;
+      const proposed = fillPattern(state.settings.pattern, {
+        family: meta.slug || "form",
+        version: group.versionLabel,
+        lastname: idn.lastname,
+        first: idn.first,
+        date: idn.date,
+        original: baseName(file.path || file.name),
+        case: idn.case,
+      }, state.settings.maxPath);
+      file.proposed = uniqueName(proposed, used, file.name, state.settings.collision);
+      if (file.proposed) used.add(file.proposed.toLowerCase());
+    }
+  }
+  scheduleSave();
+  if (!opts?.silent) paint();
+}
+
+function confirmedGroups() {
+  return state.groups.filter((g) => state.meta[g.familyKey]?.confirmed?.[g.versionKey]);
+}
+
+async function renameConfirmed() {
+  const groups = confirmedGroups();
+  if (!groups.length) {
+    setBanner("Confirm a group before renaming. Suggest names first if the proposed column is empty.");
+    return;
+  }
+  const missing = groups.some((g) => g.members.some((m) => !m.proposed));
+  if (missing) suggestNames(groups);
+  const entries = [];
+  for (const group of groups) {
+    for (const file of group.members) {
+      if (!file.proposed || file.proposed === file.name) continue;
+      entries.push({ fileId: file.id, from: file.name, to: file.proposed, path: file.path || file.name });
+    }
+  }
+  if (!entries.length) { setBanner("Nothing to rename. Proposed names match the current names."); return; }
+  const anyHandle = entries.some((e) => state.sources.get(e.fileId)?.handle && typeof state.sources.get(e.fileId).handle.move === "function");
+  const batchId = "b" + Date.now().toString(36);
+  if (state.settings.renameMode === "inplace" && !anyHandle) {
+    downloadText("quire-rename-plan.csv", toCsv(entries.map((e) => ({ ...e, ok: false, error: "no folder handle" }))));
+    downloadText("quire-rename-log.jsonl", entries.map((e) => JSON.stringify({ batch: batchId, ...e, planned: true })).join("\n") + "\n");
+    state.batches.push({ id: batchId, ts: new Date().toISOString(), planned: true, entries });
+    setBanner("These files were not opened from a writable folder, so nothing was renamed. A plan and a log downloaded. Use Open folder in Chrome or Edge to rename in place.");
+    scheduleSave();
+    return;
+  }
+  if (state.dirHandle) {
+    try {
+      await appendLog(state.dirHandle, entries.map((e) => JSON.stringify({ batch: batchId, from: e.from, to: e.to, path: e.path, ts: new Date().toISOString() })));
+    } catch (err) {
+      setBanner("Stopped before renaming: could not write quire-rename-log.jsonl (" + (err.message || err) + ").");
+      return;
+    }
+  }
+  const done = [];
+  for (const entry of entries) {
+    const src = state.sources.get(entry.fileId);
+    try {
+      if (state.settings.renameMode === "copy") {
+        if (!state.dirHandle) throw new Error("Copy needs an opened folder");
+        const dest = await state.dirHandle.getDirectoryHandle("quire-out", { create: true });
+        const handle = await dest.getFileHandle(entry.to, { create: true });
+        const writable = await handle.createWritable();
+        await writable.write(await src.file.arrayBuffer());
+        await writable.close();
+      } else {
+        await src.handle.move(entry.to);
+      }
+      entry.ok = true;
+      const file = state.files.find((f) => f.id === entry.fileId);
+      if (file && state.settings.renameMode !== "copy") file.name = entry.to;
+    } catch (err) {
+      entry.ok = false;
+      entry.error = String(err.message || err).slice(0, 180);
+    }
+    done.push(entry);
+  }
+  state.batches.push({ id: batchId, ts: new Date().toISOString(), entries: done });
+  const bad = done.filter((e) => !e.ok).length;
+  setBanner(bad ? bad + " of " + done.length + " renames failed. The log is in the folder when a folder is open." : "Renamed " + done.length + " files. Undo is available.");
+  logActivity("Rename batch " + batchId);
+  scheduleSave();
+  paint();
+}
+
+async function undoLast() {
+  const batch = [...state.batches].reverse().find((b) => !b.undone && b.entries?.some((e) => e.ok));
+  if (!batch) { setBanner("No applied rename to undo."); return; }
+  for (const entry of [...batch.entries].reverse()) {
+    if (!entry.ok) continue;
+    const src = state.sources.get(entry.fileId);
+    try {
+      if (state.settings.renameMode === "copy" && state.dirHandle) {
+        const dest = await state.dirHandle.getDirectoryHandle("quire-out");
+        await dest.removeEntry(entry.to);
+      } else if (src?.handle?.move) {
+        await src.handle.move(entry.from);
+        const file = state.files.find((f) => f.id === entry.fileId);
+        if (file) file.name = entry.from;
+      }
+    } catch (err) {
+      logActivity("Undo failed for " + entry.to + ": " + (err.message || err));
+    }
+  }
+  batch.undone = true;
+  if (state.dirHandle) {
+    await appendLog(state.dirHandle, [JSON.stringify({ undo: batch.id, ts: new Date().toISOString() })]).catch(() => {});
+  }
+  setBanner("Undid batch " + batch.id + ".");
+  scheduleSave();
+  paint();
+}
+
+async function appendLog(dir, lines) {
+  const handle = await dir.getFileHandle("quire-rename-log.jsonl", { create: true });
+  const prev = await (await handle.getFile()).text();
+  const writable = await handle.createWritable();
+  await writable.write(prev + (prev && !prev.endsWith("\n") ? "\n" : "") + lines.join("\n") + "\n");
+  await writable.close();
+}
+
+function toCsv(entries) {
+  const cell = (v) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  return "from,to,path,ok,error\n" + entries.map((e) => [e.from, e.to, e.path, e.ok, e.error || ""].map(cell).join(",")).join("\n");
+}
+
+function downloadText(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1500);
+}
+
+function openDry() {
+  const groups = confirmedGroups();
+  if (!groups.length) { setBanner("Confirm at least one group. Dry run only lists confirmed groups."); return; }
+  if (groups.some((g) => g.members.some((m) => !m.proposed))) suggestNames(groups);
+  const rows = groups.flatMap((g) => g.members.map((f) => `<tr><td>${esc(f.name)}</td><td>${esc(f.proposed || "—")}</td><td>${esc(state.meta[g.familyKey]?.slug || "")} · ${esc(g.versionLabel)}</td></tr>`));
+  const dlg = $("dry");
+  dlg.innerHTML = `<form method="dialog" class="stack"><h2>Dry run</h2><p class="hint">${rows.length} files in confirmed groups. Nothing is renamed yet.</p><table><thead><tr><th>Original</th><th>Proposed</th><th>Group</th></tr></thead><tbody>${rows.join("")}</tbody></table><div class="detail-bar"><button class="btn" value="close">Close</button><button class="btn primary" id="dryGo" type="button" value="go">Rename these</button></div></form>`;
+  dlg.showModal();
+  dlg.querySelector("#dryGo").onclick = () => { dlg.close(); void renameConfirmed(); };
+}
+
+/* ---------- samples ---------- */
+
+const SCAN_VARIANTS = [
+  { angle: 2, contrast: 0.96, brightness: 1, bg: "#d7d0c2", dx: 6, dy: 4, scribble: false },
+  { angle: -1, contrast: 1.04, brightness: 0.9, bg: "#cfc6b6", dx: -4, dy: 8, scribble: true },
+  { angle: 1, contrast: 0.92, brightness: 1.02, bg: "#e4ddd0", dx: 10, dy: -2, scribble: true },
+];
+
+function jpegBytes(canvas, q) {
+  const url = canvas.toDataURL("image/jpeg", q);
+  const bin = atob(url.split(",")[1]);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+async function scanFrom(pdfBytes, variant, title) {
+  const lib = await loadPdfJs();
+  const pdf = await lib.getDocument({ data: pdfBytes.slice(), standardFontDataUrl: fontBase() }).promise;
+  try {
+    const page = await pdf.getPage(1);
+    const vp = page.getViewport({ scale: 1.35 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(vp.width);
+    canvas.height = Math.floor(vp.height);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    const photo = document.createElement("canvas");
+    photo.width = canvas.width + 80;
+    photo.height = canvas.height + 70;
+    const pctx = photo.getContext("2d");
+    pctx.fillStyle = variant.bg;
+    pctx.fillRect(0, 0, photo.width, photo.height);
+    pctx.save();
+    pctx.translate(photo.width / 2, photo.height / 2);
+    pctx.rotate((variant.angle * Math.PI) / 180);
+    pctx.filter = `contrast(${variant.contrast}) brightness(${variant.brightness})`;
+    pctx.drawImage(canvas, -canvas.width / 2 + variant.dx, -canvas.height / 2 + variant.dy);
+    pctx.restore();
+    if (variant.scribble) {
+      pctx.strokeStyle = "#243056";
+      pctx.lineWidth = 2;
+      pctx.beginPath();
+      pctx.moveTo(photo.width * 0.18, photo.height * 0.42);
+      pctx.bezierCurveTo(photo.width * 0.28, photo.height * 0.36, photo.width * 0.36, photo.height * 0.48, photo.width * 0.48, photo.height * 0.4);
+      pctx.stroke();
+    }
+    const jpeg = jpegBytes(photo, 0.62);
+    return buildImagePdf(jpeg, photo.width, photo.height, title);
+  } finally {
+    await pdf.destroy().catch(() => {});
+  }
+}
+
+function certRects(kind) {
+  if (kind === "a") return [{ x: 64, y: 360, w: 480, h: 32 }, { x: 64, y: 300, w: 480, h: 32 }, { x: 64, y: 240, w: 480, h: 32 }];
+  const rects = [{ x: 48, y: 80, w: 16, h: 640 }];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 2; c++) rects.push({ x: 80 + c * 250, y: 180 + r * 54, w: 220, h: 40 });
+  return rects;
+}
+
+async function loadSamples() {
+  state.files = state.files.filter((f) => !String(f.id).startsWith("sample:"));
+  for (const [id, src] of [...state.sources]) if (String(id).startsWith("sample:")) state.sources.delete(id);
+  state.layoutComplete = false;
+  state.imageBudget = state.settings.imageSampleFirst;
+  state.debug = [];
+  const jobs = [];
+  const pushText = (name, bytes) => jobs.push({ name, bytes });
+  const specs = [
+    ["IMG_4401.pdf", PEOPLE[0], W9, "Rev. 03/2018", [{ name: "LastName", key: "LastName" }, { name: "FirstName", key: "FirstName" }, { name: "SSN", key: "SSN" }, { name: "Address", key: "Address" }, { name: "CityStateZip", key: "City" }], "W-9", "AcroForm Designer"],
+    ["w9 final FINAL.pdf", PEOPLE[1], W9, "Rev. 03/2018", [{ name: "LastName", key: "LastName" }, { name: "FirstName", key: "FirstName" }, { name: "SSN", key: "SSN" }, { name: "Address", key: "Address" }, { name: "CityStateZip", key: "City" }], "W-9", "AcroForm Designer"],
+    ["Document (3).pdf", PEOPLE[2], W9, "Rev. 03/2018", [{ name: "LastName", key: "LastName" }, { name: "FirstName", key: "FirstName" }, { name: "SSN", key: "SSN" }, { name: "Address", key: "Address" }, { name: "CityStateZip", key: "City" }], "W-9", "AcroForm Designer"],
+    ["scan.pdf", PEOPLE[3], W9, "Rev. 03/2018", [{ name: "LastName", key: "LastName" }, { name: "FirstName", key: "FirstName" }, { name: "SSN", key: "SSN" }, { name: "Address", key: "Address" }, { name: "CityStateZip", key: "City" }], "W-9", "AcroForm Designer"],
+    ["W9-new.pdf", PEOPLE[4], W9B, "Rev. 03/2024", [{ name: "topmostSubform.LastNm", key: "LastNm" }, { name: "topmostSubform.FirstNm", key: "FirstNm" }, { name: "topmostSubform.TIN", key: "TIN" }, { name: "topmostSubform.Addr", key: "Addr" }, { name: "topmostSubform.City", key: "City" }, { name: "topmostSubform.AcctNo", key: "AcctNo" }], "W-9", "AEM Forms"],
+    ["tax form.pdf", PEOPLE[5], W9B, "Rev. 03/2024", [{ name: "topmostSubform.LastNm", key: "LastNm" }, { name: "topmostSubform.FirstNm", key: "FirstNm" }, { name: "topmostSubform.TIN", key: "TIN" }, { name: "topmostSubform.Addr", key: "Addr" }, { name: "topmostSubform.City", key: "City" }, { name: "topmostSubform.AcctNo", key: "AcctNo" }], "W-9", "AEM Forms"],
+    ["untitled.pdf", PEOPLE[0], W9B, "Rev. 03/2024", [{ name: "topmostSubform.LastNm", key: "LastNm" }, { name: "topmostSubform.FirstNm", key: "FirstNm" }, { name: "topmostSubform.TIN", key: "TIN" }, { name: "topmostSubform.Addr", key: "Addr" }, { name: "topmostSubform.City", key: "City" }, { name: "topmostSubform.AcctNo", key: "AcctNo" }], "W-9", "AEM Forms"],
+  ];
+  const made = [];
+  for (const [name, person, body, rev, fields, title, producer] of specs) {
+    const bytes = textFile({ person, body, revLine: rev, fields, title, producer, rects: rev.includes("2024") ? w9Rects(true) : w9Rects(false) });
+    made.push({ name, bytes, kind: title });
+    pushText(name, bytes);
+  }
+  const intakeFields = [{ name: "ApplicantLast", key: "ApplicantLast" }, { name: "ApplicantFirst", key: "ApplicantFirst" }, { name: "DOB", key: "DOB" }, { name: "CaseID", key: "CaseID" }, { name: "Phone", key: "Address" }];
+  const intakes = [
+    ["intake_A.pdf", PEOPLE[1], INTAKE, "Rev. 01/2021"],
+    ["matter file.pdf", PEOPLE[2], INTAKE, "Rev. 01/2021"],
+    ["New Client.pdf", PEOPLE[3], INTAKE, "Rev. 01/2021"],
+    ["intake v3 signed.pdf", PEOPLE[4], INTAKE_B, "Rev. 06/2024"],
+    ["client-packet-page.pdf", PEOPLE[5], INTAKE_B, "Rev. 06/2024"],
+  ];
+  for (const [name, person, body, rev] of intakes) {
+    const bytes = textFile({ person, body, revLine: rev, fields: intakeFields, title: "Intake", producer: "Word Forms", rects: intakeRects() });
+    made.push({ name, bytes, kind: "Intake" });
+    pushText(name, bytes);
+  }
+  for (const [name, person] of [["privacy.pdf", PEOPLE[0]], ["HIPAA ack.pdf", PEOPLE[2]], ["notice signed.pdf", PEOPLE[4]]]) {
+    pushText(name, textFile({
+      person, body: HIPAA, revLine: "Rev. 08/2019", title: "HIPAA", producer: "Clinic Forms", rects: hipaaRects(), lineWidth: 3,
+      fields: [{ name: "PatientName", key: "PatientName" }, { name: "DateSigned", key: "DateSigned" }, { name: "Relationship", key: "FirstName" }],
+    }));
+  }
+  for (const [name, person] of [["reg1.pdf", PEOPLE[1]], ["chart scan.pdf", PEOPLE[3]], ["front desk.pdf", PEOPLE[5]]]) {
+    pushText(name, textFile({
+      person,
+      body: REG.replace("Last Name: NAME", "Last Name: " + person.LastName).replace("First Name: NAME", "First Name: " + person.FirstName),
+      revLine: "Rev. 11/2017", title: "Registration", producer: "Microsoft Word", creator: "Word", fields: [], rects: regRects(),
+    }));
+  }
+  pushText("cert wide boxes.pdf", textFile({ body: CERT, revLine: "Rev. 02/2016", title: "Certificate", producer: "Word", rects: certRects("a"), person: PEOPLE[0] }));
+  pushText("cert wide boxes (2).pdf", textFile({ body: CERT, revLine: "Rev. 02/2016", title: "Certificate", producer: "Word", rects: certRects("a"), person: PEOPLE[1] }));
+  pushText("cert grid.pdf", textFile({ body: CERT, revLine: "Rev. 02/2016", title: "Certificate", producer: "Word", rects: certRects("b"), person: PEOPLE[2] }));
+  pushText("cert grid copy.pdf", textFile({ body: CERT, revLine: "Rev. 02/2016", title: "Certificate", producer: "Word", rects: certRects("b"), person: PEOPLE[3] }));
+  pushText("tool crib.pdf", textFile({ body: EQUIP, revLine: "Rev. 04/2020", title: "Equipment", producer: "Word", person: PEOPLE[4] }));
+  pushText("packet fax.pdf", packetFile(PEOPLE[0]));
+  pushText("packet from desk.pdf", packetFile(PEOPLE[2]));
+  pushText("fax cover 1.pdf", textFile({ body: "FAX COVER SHEET\nPages including this cover", revLine: "", title: "Cover", producer: "Fax", person: PEOPLE[0], fields: [] }));
+  pushText("fax cover 2.pdf", textFile({ body: "FAX COVER SHEET\nSee attached", revLine: "", title: "Cover", producer: "Fax", person: PEOPLE[1], fields: [] }));
+  const masters = {
+    w9a: made.find((m) => m.name === "IMG_4401.pdf").bytes,
+    w9b: made.find((m) => m.name === "W9-new.pdf").bytes,
+    intake: made.find((m) => m.name === "intake_A.pdf").bytes,
+    hipaa: null,
+  };
+  const scanJobs = [
+    ["CamScanner 03-12-2024.pdf", masters.w9a, SCAN_VARIANTS[0]],
+    ["IMG_8831.pdf", masters.w9a, SCAN_VARIANTS[1]],
+    ["IMG_8832.pdf", masters.w9a, SCAN_VARIANTS[2]],
+    ["CAMSCANNER_new.pdf", masters.w9b, SCAN_VARIANTS[0]],
+    ["photo tax form.pdf", masters.w9b, SCAN_VARIANTS[1]],
+    ["intake photo.pdf", masters.intake, SCAN_VARIANTS[2]],
+    ["intake photo 2.pdf", masters.intake, SCAN_VARIANTS[0]],
+  ];
+  let n = 0;
+  const total = jobs.length + scanJobs.length + 1;
+  for (const job of jobs) {
+    n++;
+    state.phase = "Building sample " + n + " / " + total;
+    paintStatus();
+    adoptSample(job.name, job.bytes, n);
+    if (n % 3 === 0) await yieldTick();
+  }
+  for (const [name, bytes, variant] of scanJobs) {
+    n++;
+    state.phase = "Building scan " + n + " / " + total;
+    paintStatus();
+    const scanned = await scanFrom(bytes, variant, name);
+    adoptSample(name, scanned, n);
+    await yieldTick();
+  }
+  adoptSample("locked-or-broken.pdf", enc.encode("%PDF-1.4\nthis is not a pdf body"), ++n);
+  logActivity("Loaded " + state.files.filter((f) => String(f.id).startsWith("sample:")).length + " sample PDFs.");
+  paint();
+  await runPipeline();
+}
+
+function adoptSample(name, bytes, index) {
+  const file = new File([bytes], name, { type: "application/pdf", lastModified: Date.now() - index * 86400000 });
+  const id = "sample:" + fnv(name + ":" + index);
+  state.files.push({ id, name, path: name, size: file.size, mtime: file.lastModified, didRead: false });
+  state.sources.set(id, { file, handle: null });
+}
+
+/* ---------- storage ---------- */
+
+function idb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open("quire", 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains("kv")) req.result.createObjectStore("kv");
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function kvSet(key, value) {
+  const db = await idb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").put(value, key);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function kvGet(key) {
+  const db = await idb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("kv", "readonly");
+    const req = tx.objectStore("kv").get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function kvDel(key) {
+  const db = await idb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").delete(key);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+let saveTimer = 0;
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { void saveSession(); }, 400);
+}
+async function saveSession() {
+  try {
+    await kvSet("files", state.files);
+    await kvSet("settings", state.settings);
+    await kvSet("meta", state.meta);
+    await kvSet("batches", state.batches);
+    await kvSet("flags", { layoutComplete: state.layoutComplete, imageBudget: state.imageBudget });
+  } catch (err) {
+    logActivity("Could not save session: " + (err.message || err));
+  }
+}
+async function loadSession() {
+  try {
+    const files = await kvGet("files");
+    const settings = await kvGet("settings");
+    const meta = await kvGet("meta");
+    const batches = await kvGet("batches");
+    const flags = await kvGet("flags");
+    if (settings) state.settings = { ...DEFAULTS, ...settings };
+    if (meta) state.meta = meta;
+    if (batches) state.batches = batches;
+    if (flags) {
+      state.layoutComplete = !!flags.layoutComplete;
+      state.imageBudget = flags.imageBudget ?? state.settings.imageSampleFirst;
+    }
+    if (Array.isArray(files) && files.length) {
+      state.files = files;
+      recluster();
+      logActivity("Restored " + files.length + " fingerprints. Reopen the folder to rename, or load samples.");
+    }
+    const dir = await kvGet("dir").catch(() => null);
+    if (dir && dir.queryPermission) state.dirHandle = dir;
+  } catch { /* private mode */ }
+}
+async function clearSession() {
+  state.files = [];
+  state.sources.clear();
+  state.meta = {};
+  state.batches = [];
+  state.groups = [];
+  state.thumbs.clear();
+  state.layoutComplete = false;
+  headerCache.clear();
+  await kvDel("files").catch(() => {});
+  await kvDel("meta").catch(() => {});
+  await kvDel("batches").catch(() => {});
+  paint();
+}
+
+/* ---------- UI ---------- */
+
+function esc(s) {
+  const amp = String.fromCharCode(38);
+  return String(s ?? "")
+    .replaceAll(amp, amp + "amp;")
+    .replaceAll("<", amp + "lt;")
+    .replaceAll(">", amp + "gt;")
+    .replaceAll('"', amp + "quot;")
+    .replaceAll("'", amp + "#39;");
+}
+
+function logActivity(msg) {
+  state.activity.unshift(String(msg));
+  state.activity = state.activity.slice(0, 8);
+  const log = $("log");
+  if (log) log.innerHTML = state.activity.map((line) => `<p>${esc(line)}</p>`).join("");
+}
+
+function setBanner(text) {
+  state.banner = text || "";
+  const el = $("banner");
+  if (!el) return;
+  el.textContent = state.banner;
+  el.classList.toggle("hidden", !state.banner);
+}
+
+function layoutDone(file) {
+  if (!file.didRead) return false;
+  if (file.didLayout || file.junkLikely || file.quarantine || file.outOfRange) return true;
+  if (state.settings.trustFields && (file.fieldNames?.length || 0) >= 2 && file.capture !== "scan") return true;
+  return false;
+}
+function ocrDone(file) {
+  if (!file.didRead) return false;
+  if (file.didOcr || file.junkLikely || file.quarantine) return true;
+  return (file.realChars || 0) >= state.settings.ocrTriggerChars;
+}
+
+function paintStatus() {
+  const total = state.files.length;
+  const read = state.files.filter((f) => f.didRead).length;
+  $("status").textContent = state.phase || "Idle";
+  $("counts").textContent = total ? total + " files" : "";
+  const frac = total ? read / total : 0;
+  $("bar").style.width = Math.round(frac * 100) + "%";
+  $("pause").disabled = !state.running;
+  $("pause").textContent = state.pause ? "Paused" : "Pause";
+  $("run").disabled = state.running;
+  $("run").textContent = state.sampleHold && !state.running ? "Continue layout" : "Run pipeline";
+  const stages = [
+    ["Inventory", state.files.filter((f) => f.didRead).length, total],
+    ["Digital fields", state.files.filter((f) => f.didRead).length, total],
+    ["Text", state.files.filter((f) => f.didRead).length, total],
+    ["Layout", state.files.filter(layoutDone).length, total],
+    ["OCR", state.files.filter(ocrDone).length, total],
+    ["Groups", state.groups.filter((g) => !["quarantine", "unsorted", "filtered"].includes(g.familyKey)).length, null],
+    ["Quarantine", state.files.filter((f) => f.quarantine).length, null],
+  ];
+  const current = state.phase.toLowerCase();
+  $("stages").innerHTML = stages.map((row, i) => {
+    const on = current.includes(row[0].toLowerCase().slice(0, 4));
+    const count = row[2] == null ? String(row[1]) : row[1] + " / " + row[2];
+    return `<button type="button" class="stage${on ? " on" : ""}" data-act="stage" data-label="${esc(row[0])}"><span class="num">${String(i + 1).padStart(2, "0")}</span><span>${esc(row[0])}</span><span class="count">${esc(count)}</span></button>`;
+  }).join("");
+}
+
+let boardSig = "";
+function paintBoard() {
+  const board = $("board");
+  if (!state.files.length) {
+    boardSig = "empty";
+    board.innerHTML = `<div class="empty"><h2>Sort the stack before you rename it</h2><p>Open a folder of PDFs. Quire reads fields and text first, renders a layout hash only for what those cannot place, and OCRs a header band only when the page has almost no text.</p><ol><li>Inventory, AcroForm fields, and a cleaned header token set.</li><li>Perceptual hash and line profile, deskewed and cropped.</li><li>You name the family once, confirm the group, then dry-run the rename.</li></ol></div>`;
+    return;
+  }
+  const families = new Map();
+  for (const group of state.groups) {
+    if (!families.has(group.familyKey)) families.set(group.familyKey, []);
+    families.get(group.familyKey).push(group);
+  }
+  const order = [...families.entries()].sort((a, b) => rankFamily(a[0]) - rankFamily(b[0]) || b[1].reduce((s, g) => s + g.members.length, 0) - a[1].reduce((s, g) => s + g.members.length, 0));
+  const sig = order.map(([key, groups]) => key + ":" + groups.map((g) => g.id + "x" + g.members.length + (state.meta[key]?.confirmed?.[g.versionKey] ? "y" : "n") + (state.meta[key]?.slug || "")).join(",")).join("|") + "#" + state.selected;
+  if (sig === boardSig) return;
+  boardSig = sig;
+  if (!order.length) {
+    board.innerHTML = `<div class="empty"><h2>No groups yet</h2><p>Add PDFs and run the pipeline. Open a group, then use Map to point each field at last name, first name, date, or case.</p></div>`;
+    return;
+  }
+  board.innerHTML = order.map(([key, groups]) => {
+    const members = groups.flatMap((g) => g.members);
+    const meta = ensureMeta(key, key === "junk" ? "junk" : suggestSlug(members));
+    const mix = mixLine(members);
+    return `<section class="family"><div class="family-head"><input class="slug" aria-label="Family slug" data-act="slug" data-family="${esc(key)}" value="${esc(meta.slug || "")}" ${key === "quarantine" ? "disabled" : ""} /><span class="hint">${groups.length} version${groups.length === 1 ? "" : "s"} · ${members.length} files · ${esc(mix)}</span><button type="button" class="mini" data-act="confirm-family" data-family="${esc(key)}">Confirm family</button></div><div class="cards">${groups.map((g) => cardHtml(g, meta)).join("")}</div></section>`;
+  }).join("");
+  void fillThumbs(board);
+}
+
+function rankFamily(key) {
+  if (key === "quarantine") return 3;
+  if (key === "unsorted" || key === "filtered") return 2;
+  if (key === "junk") return 1;
+  return 0;
+}
+
+function mixLine(members) {
+  const fillable = members.filter((m) => m.capture === "fillable").length;
+  const digital = members.filter((m) => m.capture === "digital").length;
+  const scan = members.filter((m) => m.capture === "scan").length;
+  return [fillable && fillable + " fillable", digital && digital + " text", scan && scan + " scans"].filter(Boolean).join(" · ") || "unread";
+}
+
+function cardHtml(group, meta) {
+  const conf = confidence(group);
+  const yes = !!meta.confirmed?.[group.versionKey];
+  const on = state.selected === group.id;
+  const bad = group.familyKey === "quarantine" || group.familyKey === "junk";
+  const thumbs = group.members.slice(0, 4).map((m) => state.thumbs.has(m.id)
+    ? `<img alt="" data-thumb="${esc(m.id)}" />`
+    : `<div class="ghost" data-thumb="${esc(m.id)}"></div>`).join("");
+  const pages = mode(group.members.map((m) => m.pageCount || 1));
+  const bucket = mode(group.members.map((m) => m.sizeBucket || ""));
+  const packet = group.members.some((m) => m.packet) ? " · packet" : "";
+  const options = state.groups
+    .filter((g, i, arr) => arr.findIndex((x) => x.familyKey === g.familyKey) === i && g.familyKey !== group.familyKey && !["quarantine", "filtered"].includes(g.familyKey))
+    .map((g) => `<option value="${esc(g.familyKey)}">${esc(state.meta[g.familyKey]?.slug || g.familyKey)}</option>`)
+    .join("");
+  return `<article class="card${on ? " is-on" : ""}${yes ? " is-yes" : ""}${bad ? " is-bad" : ""}" data-act="select" data-id="${esc(group.id)}"><div class="thumbs">${thumbs}</div><div class="card-top"><h3>${esc(group.versionLabel)}</h3><span class="pill ${conf.level === "High" ? "high" : "review"}">${esc(conf.level)}</span></div><p class="why">${esc(conf.why)}</p><p class="mix">${esc(mixLine(group.members))} · ${esc(pages)}p · ${esc(bucket)}${packet}</p><div class="card-actions"><button type="button" class="mini" data-act="confirm" data-id="${esc(group.id)}">${yes ? "Confirmed" : "Confirm"}</button><button type="button" class="mini" data-act="junk" data-id="${esc(group.id)}">Junk</button>${options ? `<label class="hint">Version of <select data-act="relink" data-id="${esc(group.id)}"><option value="">Keep</option>${options}</select></label>` : ""}</div></article>`;
+}
+
+function mode(list) {
+  const counts = new Map();
+  for (const item of list) counts.set(item, (counts.get(item) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+}
+
+async function fillThumbs(root) {
+  for (const node of root.querySelectorAll("[data-thumb]")) {
+    const id = node.getAttribute("data-thumb");
+    let url = state.thumbs.get(id);
+    if (!url) {
+      url = await kvGet("thumb:" + id).catch(() => null);
+      if (url) state.thumbs.set(id, url);
+    }
+    if (url && node.tagName === "IMG") node.src = url;
+    else if (url && node.classList.contains("ghost")) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.src = url;
+      node.replaceWith(img);
+    }
+  }
+}
+
+function mapPanel(group, meta) {
+  const members = familyMembers(group.familyKey);
+  const map = meta.fieldMap;
+  const armed = state.arm || "lastname";
+  const names = [...new Set(members.flatMap((member) => member.fieldNames || []))].sort();
+  const slots = SLOT_DEFS.map(([slot, label]) => `<button type="button" class="slot${armed === slot ? " on" : ""}" data-act="arm" data-slot="${slot}" aria-pressed="${armed === slot ? "true" : "false"}"><span class="k">${label}</span><strong data-source="${slot}">${esc(slotSource(map, slot))}</strong><em data-sample="${slot}">${esc(slotSample(members, map, slot))}</em></button>`).join("");
+  const fields = names.map((name) => {
+    const used = SLOT_DEFS.find(([slot]) => map?.[slot]?.mode === "field" && map[slot].key === name);
+    const examples = fieldExamples(members, name);
+    return `<button type="button" class="field-row${used && used[0] === armed ? " on" : ""}" data-act="assign" data-field="${esc(name)}"><span class="fname">${esc(name)}</span><span class="fvals">${esc(examples.join(" · ") || "empty on these files")}</span><span class="fused">${used ? esc(used[1]) : "Use"}</span></button>`;
+  }).join("");
+  const regexes = SLOT_DEFS.map(([slot, label]) => `<label>${label}<input data-act="regex" data-slot="${slot}" value="${esc(map?.[slot]?.mode === "regex" ? map[slot].pattern || "" : "")}" placeholder="pattern with (the part you want)" /></label>`).join("");
+  const sampleText = members.find((member) => member.rawText)?.rawText || "";
+  return `<div class="map"><p class="hint">Tap a name part, then tap the PDF field that holds it. Every file in this family updates. To hard-code a map, edit PRESET_MAPS at the top of this file.</p><div class="slots">${slots}</div>${names.length ? `<div class="field-list">${fields}</div><button type="button" class="mini" id="guess">Guess from field names</button>` : `<p class="hint">No fillable fields. Use a text pattern, with parentheses around the value you want.</p>`}${sampleText && !names.length ? `<pre class="snip">${esc(sampleText.slice(0, 700))}</pre>` : ""}<details class="textmap"${names.length ? "" : " open"}><summary>Match page text instead</summary><div class="stack">${regexes}</div></details></div>`;
+}
+
+function paintDetail() {
+  const el = $("detail");
+  const group = state.groups.find((g) => g.id === state.selected);
+  if (!group) {
+    el.innerHTML = `<h2>Map</h2><div class="empty"><p>Select a group. Map is how each PDF field becomes part of the new filename. Nothing is renamed until you confirm and run Rename.</p><div class="detail-bar"><button type="button" class="btn" id="suggest">Suggest names</button><button type="button" class="btn" id="dryRun">Dry run</button><button type="button" class="btn primary" id="rename">Rename</button><button type="button" class="btn" id="undo">Undo last batch</button></div></div>`;
+    return;
+  }
+  const meta = ensureMeta(group.familyKey, suggestSlug(group.members));
+  const files = group.members.slice(0, 150);
+  el.innerHTML = `<h2>Map · ${esc(meta.slug || "Group")}</h2>
+    <div class="detail-bar">
+      <button type="button" class="btn" id="suggest">Suggest names</button>
+      <button type="button" class="btn" id="dryRun">Dry run</button>
+      <button type="button" class="btn primary" id="rename">Rename</button>
+      <button type="button" class="btn" id="undo">Undo last batch</button>
+      <button type="button" class="btn" id="split">Split checked</button>
+    </div>
+    ${mapPanel(group, meta)}
+    <label class="hint">Filter <input id="filter" value="${esc(state.query || "")}" placeholder="Name" /></label>
+    <p class="hint">${files.length} of ${group.members.length} files in this version · ${esc(group.versionLabel)} · ${esc(state.settings.pattern)}</p>
+    ${files.map((f) => `<div class="file"><label class="check"><input type="checkbox" data-act="check" data-file="${esc(f.id)}" ${state.checked.has(f.id) ? "checked" : ""}/><span><strong>${esc(f.name)}</strong><br/><span class="proposed" data-proposed="${esc(f.id)}">${esc(f.proposed || "—")}</span><br/><span class="hint">${esc(fileHint(f))}</span></span></label><div class="row-actions"><button type="button" class="mini" data-act="eject" data-file="${esc(f.id)}">Not this form</button>${(f.realChars || 0) < 40 ? `<button type="button" class="mini" data-act="deep" data-file="${esc(f.id)}">Deep OCR</button>` : ""}</div></div>`).join("")}`;
+}
+
+function fileHint(file) {
+  if (file.quarantine) return file.quarantine;
+  const idn = file.identity;
+  const who = idn ? [idn.lastname, idn.first, idn.date, idn.case].filter(Boolean).join(" · ") : "";
+  const bits = [
+    file.capture,
+    (file.pageCount || "?") + "p",
+    file.sizeBucket,
+    file.producer && file.producer.slice(0, 32),
+    file.packet && "packet p" + (file.dominantPage || ""),
+    who,
+    file.layoutError,
+    file.ocrError,
+  ];
+  return bits.filter(Boolean).join(" · ");
+}
+
+function paint() {
+  paintStatus();
+  paintBoard();
+  paintDetail();
+  bindDetail();
+}
+
+function bindDetail() {
+  $("suggest")?.addEventListener("click", () => suggestNames(reviewGroups()));
+  $("dryRun")?.addEventListener("click", openDry);
+  $("rename")?.addEventListener("click", () => { void renameConfirmed(); });
+  $("undo")?.addEventListener("click", () => { void undoLast(); });
+  $("split")?.addEventListener("click", splitChecked);
+  $("guess")?.addEventListener("click", () => {
+    const group = state.groups.find((g) => g.id === state.selected);
+    if (!group) return;
+    const meta = ensureMeta(group.familyKey);
+    meta.fieldMap = guessMap(familyMembers(group.familyKey));
+    suggestNames(familyGroups(group.familyKey));
+  });
+  $("filter")?.addEventListener("input", (event) => {
+    const q = event.target.value.toLowerCase();
+    state.query = q;
+    for (const row of $("detail").querySelectorAll(".file")) {
+      const text = row.textContent.toLowerCase();
+      row.classList.toggle("hidden", q && !text.includes(q));
+    }
+  });
+  for (const input of $("detail").querySelectorAll("[data-act=regex]")) {
+    input.addEventListener("input", onRegexInput);
+  }
+}
+
+function onRegexInput(event) {
+  const group = state.groups.find((g) => g.id === state.selected);
+  if (!group) return;
+  const pattern = event.target.value;
+  applyMap(group, event.target.dataset.slot, pattern.trim() ? { mode: "regex", pattern } : { mode: "blank" });
+  syncMapReadout(group);
+}
+
+function syncMapReadout(group) {
+  const meta = state.meta[group.familyKey];
+  const members = familyMembers(group.familyKey);
+  const map = meta?.fieldMap;
+  for (const file of members) {
+    const node = document.querySelector('[data-proposed="' + CSS.escape(file.id) + '"]');
+    if (node) node.textContent = file.proposed || "—";
+  }
+  for (const [slot] of SLOT_DEFS) {
+    const sample = document.querySelector('[data-sample="' + slot + '"]');
+    if (sample) sample.textContent = slotSample(members, map, slot);
+    const source = document.querySelector('[data-source="' + slot + '"]');
+    if (source) source.textContent = slotSource(map, slot);
+  }
+  const armed = state.arm || "lastname";
+  for (const row of document.querySelectorAll(".field-row")) {
+    const name = row.dataset.field;
+    const used = SLOT_DEFS.find(([slot]) => map?.[slot]?.mode === "field" && map[slot].key === name);
+    row.classList.toggle("on", !!(used && used[0] === armed));
+    const badge = row.querySelector(".fused");
+    if (badge) badge.textContent = used ? used[1] : "Use";
+  }
+}
+
+function showPane(name) {
+  document.querySelectorAll(".tabs button").forEach((btn) => btn.setAttribute("aria-selected", btn.dataset.pane === name ? "true" : "false"));
+  document.querySelectorAll("[data-pane-body]").forEach((pane) => pane.classList.toggle("on", pane.dataset.paneBody === name));
+}
+
+function onBoardClick(event) {
+  const target = event.target.closest("[data-act]");
+  if (!target) return;
+  const act = target.dataset.act;
+  if (act === "slug") return;
+  if (act === "select") {
+    state.selected = target.dataset.id;
+    primeFamily(state.groups.find((g) => g.id === state.selected)?.familyKey || "");
+    const picked = state.groups.find((g) => g.id === state.selected);
+    if (picked && familyGroups(picked.familyKey).some((g) => g.members.some((m) => m.didRead && !m.proposed))) {
+      suggestNames(familyGroups(picked.familyKey), { silent: true });
+    }
+    boardSig = "";
+    paint();
+    if (matchMedia("(max-width: 959px)").matches) showPane("detail");
+    return;
+  }
+  if (act === "confirm") {
+    const group = state.groups.find((g) => g.id === target.dataset.id);
+    if (!group) return;
+    const meta = ensureMeta(group.familyKey);
+    meta.confirmed[group.versionKey] = !meta.confirmed[group.versionKey];
+    boardSig = "";
+    scheduleSave();
+    paint();
+  }
+  if (act === "confirm-family") {
+    for (const group of state.groups.filter((g) => g.familyKey === target.dataset.family)) {
+      ensureMeta(group.familyKey).confirmed[group.versionKey] = true;
+    }
+    boardSig = "";
+    scheduleSave();
+    paint();
+  }
+  if (act === "junk") {
+    const group = state.groups.find((g) => g.id === target.dataset.id);
+    if (!group) return;
+    for (const file of group.members) { file.forceJunk = true; file.manualFamilyId = null; file.ejected = false; }
+    boardSig = "";
+    recluster();
+    scheduleSave();
+    paint();
+  }
+  if (act === "stage") {
+    const label = target.dataset.label;
+    const group = state.groups.find((g) => (label === "Quarantine" && g.familyKey === "quarantine"));
+    if (group) { state.selected = group.id; boardSig = ""; paint(); }
+  }
+}
+
+function onBoardChange(event) {
+  const target = event.target;
+  if (target.dataset.act === "slug") {
+    const meta = ensureMeta(target.dataset.family);
+    meta.slug = sanitizeToken(target.value).toLowerCase() || target.value.trim();
+    meta.slugTouched = true;
+    scheduleSave();
+    return;
+  }
+  if (target.dataset.act === "relink" && target.value) {
+    const group = state.groups.find((g) => g.id === target.dataset.id);
+    if (!group) return;
+    for (const file of group.members) {
+      file.manualFamilyId = target.value;
+      file.manualVersion = group.versionKey;
+      file.forceJunk = false;
+      file.ejected = false;
+    }
+    state.selected = null;
+    recluster();
+    scheduleSave();
+    boardSig = "";
+    paint();
+  }
+  if (target.dataset.act === "map") {
+    const group = state.groups.find((g) => g.id === state.selected);
+    if (!group) return;
+    const value = target.value;
+    const spec = !value ? { mode: "blank" } : value === "__regex" ? { mode: "regex", pattern: target.dataset.slot === "date" ? "(\\d{1,2}[/.-]\\d{1,2}[/.-]\\d{2,4})" : "([A-Za-z][A-Za-z' -]{1,40})" } : { mode: "field", key: value };
+    applyMap(group, target.dataset.slot, spec);
+    paint();
+  }
+  if (target.dataset.act === "check") {
+    if (target.checked) state.checked.add(target.dataset.file);
+    else state.checked.delete(target.dataset.file);
+  }
+}
+
+function splitChecked() {
+  const ids = [...state.checked];
+  if (!ids.length) { setBanner("Check files in the table, then split."); return; }
+  const family = "manual:" + fnv(ids.join("|") + Date.now());
+  for (const file of state.files) {
+    if (!ids.includes(file.id)) continue;
+    file.manualFamilyId = family;
+    file.manualVersion = "split";
+    file.forceJunk = false;
+    file.ejected = false;
+  }
+  state.checked.clear();
+  recluster();
+  scheduleSave();
+  boardSig = "";
+  paint();
+}
+
+async function deepOcr(file) {
+  state.phase = "Deep OCR " + file.name;
+  paintStatus();
+  try {
+    const src = state.sources.get(file.id);
+    const lib = await loadPdfJs();
+    const pdf = await lib.getDocument({ data: new Uint8Array(await src.file.arrayBuffer()), standardFontDataUrl: fontBase() }).promise;
+    const page = await pdf.getPage(file.dominantPage || 1);
+    const vp = page.getViewport({ scale: 1.4 });
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(vp.width);
+    canvas.height = Math.floor(vp.height);
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    await pdf.destroy().catch(() => {});
+    const text = await ocrCanvas(canvas, state.settings.ocrLang);
+    const norm = normalizeText(text, state.settings);
+    file.ocrText = text.slice(0, 800);
+    file.rawText = text.slice(0, 2500);
+    file.didOcr = true;
+    if (norm.tokens.length) file.tokens = norm.tokens;
+    if (norm.revision) file.revision = norm.revision;
+    logActivity("Deep OCR finished for " + file.name);
+    recluster();
+    paint();
+  } catch (err) {
+    setBanner("Deep OCR failed: " + (err.message || err));
+  }
+}
+
+function buildSettings() {
+  const s = state.settings;
+  const num = (key, label, step) => `<label>${label}<input data-key="${key}" type="number" step="${step || "1"}" value="${esc(s[key])}" /></label>`;
+  const check = (key, label) => `<label><span><input data-key="${key}" type="checkbox" ${s[key] ? "checked" : ""}/> ${label}</span></label>`;
+  $("settings").innerHTML = `<form method="dialog" class="stack" id="settingsForm"><h2>Advanced</h2>
+    <p class="hint">Defaults are enough for a first pass. Thresholds are not averaged into one score.</p>
+    <div class="grid-2">
+      ${num("dpi", "Render DPI", "1")}
+      ${num("skewDeg", "Skew tolerance (degrees)", "1")}
+      ${num("textJaccard", "Text Jaccard", "0.01")}
+      ${num("sharedTextMin", "Shared tokens minimum", "1")}
+      ${num("fieldVersionJaccard", "Field Jaccard, same version", "0.01")}
+      ${num("fieldFamilyJaccard", "Field Jaccard, same family", "0.01")}
+      ${num("hashMax", "Max hash distance", "0.01")}
+      ${num("projMin", "Min line-profile similarity", "0.01")}
+      ${num("textPlaceMinTokens", "Tokens that count as placed", "1")}
+      ${num("ocrTriggerChars", "OCR if fewer letters than", "1")}
+      ${num("imageSampleFirst", "Image-only sample, then pause", "1")}
+      ${num("layoutSample", "Layout samples inside a large text group", "1")}
+      ${num("workers", "Read concurrency (2–4)", "1")}
+      ${num("minPages", "Min pages", "1")}
+      ${num("maxPages", "Max pages", "1")}
+      ${num("maxPath", "Max name length", "1")}
+      ${num("headerBand", "Header band (0–1)", "0.01")}
+    </div>
+    <label>OCR language<input data-key="ocrLang" value="${esc(s.ocrLang)}" /></label>
+    <label>Date format<input data-key="dateFormat" value="${esc(s.dateFormat)}" /></label>
+    <label>Time zone (blank = UTC date parts)<input data-key="timeZone" value="${esc(s.timeZone)}" placeholder="America/Denver" /></label>
+    <label>Rename pattern<input data-key="pattern" value="${esc(s.pattern)}" /></label>
+    <label>Collision
+      <select data-key="collision"><option value="suffix"${s.collision === "suffix" ? " selected" : ""}>Suffix -2</option><option value="skip"${s.collision === "skip" ? " selected" : ""}>Skip</option></select>
+    </label>
+    <label>Write mode
+      <select data-key="renameMode"><option value="inplace"${s.renameMode === "inplace" ? " selected" : ""}>Rename in place</option><option value="copy"${s.renameMode === "copy" ? " selected" : ""}>Copy into quire-out</option></select>
+    </label>
+    <label>Ignore tokens<textarea data-key="ignoreTokens" rows="3">${esc(s.ignoreTokens)}</textarea></label>
+    ${check("ocrHeaderOnly", "OCR only the page-1 header band")}
+    ${check("trustFields", "Trust field names over image")}
+    ${check("useMtime", "If no date is found, use the file modified time")}
+    <table><thead><tr><th>Signal</th><th>Good for</th><th>Weak for</th></tr></thead><tbody>
+      <tr><td>AcroForm field-name set</td><td>Exact template version</td><td>Scans, flattened PDFs</td></tr>
+      <tr><td>Header token overlap</td><td>Same form, different years</td><td>Hand-filled scans</td></tr>
+      <tr><td>Hash after deskew and crop</td><td>Scanned copies, tilt, contrast</td><td>Forms that share a logo only</td></tr>
+      <tr><td>Line-projection profile</td><td>Box layout even if text differs</td><td>Heavy stamps or folded pages</td></tr>
+      <tr><td>Page count and page size</td><td>Packet versus single form</td><td>Mixed duplex scans</td></tr>
+      <tr><td>Embedded revision date</td><td>Version label</td><td>Missing on old copies</td></tr>
+    </tbody></table>
+    <div class="detail-bar"><button class="btn primary" value="save">Save</button><button class="btn" value="cancel" type="button" id="settingsClose">Close</button><button class="btn rust" type="button" id="wipe">Clear saved fingerprints</button></div>
+  </form>`;
+  $("settingsClose").onclick = () => $("settings").close();
+  $("wipe").onclick = () => { void clearSession(); $("settings").close(); };
+  $("settingsForm").addEventListener("submit", () => {
+    const next = { ...state.settings };
+    for (const input of $("settingsForm").querySelectorAll("[data-key]")) {
+      const key = input.dataset.key;
+      if (input.type === "checkbox") next[key] = input.checked;
+      else if (input.type === "number") next[key] = Number(input.value);
+      else next[key] = input.value;
+    }
+    next.workers = Math.max(2, Math.min(4, next.workers | 0));
+    state.settings = next;
+    state.imageBudget = next.imageSampleFirst;
+    scheduleSave();
+    recluster();
+    boardSig = "";
+    paint();
+  });
+}
+
+async function walkDir(dir, prefix, out) {
+  for await (const [name, handle] of dir.entries()) {
+    if (name.startsWith(".")) continue;
+    if (handle.kind === "directory") {
+      if (name === "node_modules" || name === "quire-out") continue;
+      await walkDir(handle, prefix + name + "/", out);
+    } else if (/\.pdf$/i.test(name)) {
+      out.push({ file: await handle.getFile(), handle, path: prefix + name });
+    }
+  }
+}
+
+async function addIncoming(items) {
+  let added = 0;
+  for (const item of items) {
+    const path = item.path || item.file.webkitRelativePath || item.file.name;
+    const id = fnv([path, item.file.size, item.file.lastModified].join("|"));
+    const existing = state.files.find((f) => f.id === id);
+    state.sources.set(id, { file: item.file, handle: item.handle || null });
+    if (existing) continue;
+    state.files.push({ id, name: item.file.name, path, size: item.file.size, mtime: item.file.lastModified, didRead: false });
+    added++;
+  }
+  logActivity(added ? "Added " + added + " PDF" + (added === 1 ? "" : "s") + "." : "No new PDFs. Existing fingerprints were kept.");
+  if (added) {
+    state.layoutComplete = false;
+    state.imageBudget = state.settings.imageSampleFirst;
+  }
+  scheduleSave();
+  paint();
+}
+
+async function openFolder() {
+  if (!window.showDirectoryPicker) {
+    setBanner("This browser cannot write back to a folder. Add PDFs instead. A rename downloads a plan.");
+    $("dirPick").click();
+    return;
+  }
+  try {
+    const dir = await window.showDirectoryPicker({ mode: "readwrite", id: "quire-folder" });
+    state.dirHandle = dir;
+    kvSet("dir", dir).catch(() => {});
+    const found = [];
+    state.phase = "Listing PDFs";
+    paintStatus();
+    await walkDir(dir, "", found);
+    await addIncoming(found);
+  } catch (err) {
+    if (err?.name !== "AbortError") setBanner(String(err.message || err));
+  }
+}
+
+async function downloadStandalone() {
+  const tag = document.querySelector('script[type="module"][src="quire.js"]');
+  let html = "<!DOCTYPE html>\n" + document.documentElement.outerHTML;
+  if (tag) {
+    const js = await fetch(new URL("quire.js", document.baseURI)).then((r) => r.text());
+    html = html.replace('<script type="module" src="quire.js"><\/script>', "<script type=\"module\">\n" + js.replace(/<\/script/gi, "<\\/script") + "\n<\/script>");
+  }
+  downloadText("quire.html", html);
+  logActivity("Saved quire.html. It is one file: open it in Chrome or Edge. pdf.js uses a CDN if the vendor folder is not beside it. Edit PRESET_MAPS near the top to pin field names.");
+}
+
+function bootChecks() {
+  const errors = selfCheck();
+  if (errors.length) setBanner("Self-check failed: " + errors.join("; "));
+  return errors;
+}
+
+function wire() {
+  $("openFolder").onclick = () => { void openFolder(); };
+  $("addFiles").onclick = () => $("filePick").click();
+  $("samples").onclick = () => { void loadSamples(); };
+  $("run").onclick = () => {
+    if (state.sampleHold) { state.sampleHold = false; state.imageBudget = Infinity; }
+    void runPipeline();
+  };
+  $("pause").onclick = () => { state.pause = true; state.phase = "Pausing…"; paintStatus(); };
+  $("regroup").onclick = () => { recluster(); boardSig = ""; paint(); };
+  $("openSettings").onclick = () => { buildSettings(); $("settings").showModal(); };
+  $("downloadHtml").onclick = () => { void downloadStandalone(); };
+  $("filePick").onchange = () => { void addIncoming([...$("filePick").files].map((file) => ({ file, path: file.name }))); $("filePick").value = ""; };
+  $("dirPick").onchange = () => {
+    void addIncoming([...$("dirPick").files].filter((f) => /\.pdf$/i.test(f.name)).map((file) => ({ file, path: file.webkitRelativePath || file.name })));
+    $("dirPick").value = "";
+  };
+  $("board").addEventListener("click", onBoardClick);
+  $("board").addEventListener("change", onBoardChange);
+  $("rail").addEventListener("click", onBoardClick);
+  $("detail").addEventListener("click", (event) => {
+    const target = event.target.closest("[data-act]");
+    if (!target) return;
+    if (target.dataset.act === "arm") {
+      state.arm = target.dataset.slot;
+      for (const button of $("detail").querySelectorAll(".slot")) {
+        const on = button.dataset.slot === state.arm;
+        button.classList.toggle("on", on);
+        button.setAttribute("aria-pressed", on ? "true" : "false");
+      }
+      const group = state.groups.find((g) => g.id === state.selected);
+      if (group) syncMapReadout(group);
+      return;
+    }
+    if (target.dataset.act === "assign") {
+      const group = state.groups.find((g) => g.id === state.selected);
+      if (!group) return;
+      const slot = state.arm || "lastname";
+      const field = target.dataset.field;
+      const current = state.meta[group.familyKey]?.fieldMap?.[slot];
+      applyMap(group, slot, current?.mode === "field" && current.key === field ? { mode: "blank" } : { mode: "field", key: field });
+      paint();
+      return;
+    }
+    if (target.dataset.act === "eject") {
+      const file = state.files.find((f) => f.id === target.dataset.file);
+      if (!file) return;
+      file.ejected = true;
+      file.manualFamilyId = null;
+      file.forceJunk = false;
+      recluster();
+      boardSig = "";
+      scheduleSave();
+      paint();
+    }
+    if (target.dataset.act === "deep") {
+      const file = state.files.find((f) => f.id === target.dataset.file);
+      if (file) void deepOcr(file);
+    }
+  });
+  $("detail").addEventListener("change", onBoardChange);
+  document.querySelectorAll(".tabs button").forEach((btn) => btn.addEventListener("click", () => showPane(btn.dataset.pane)));
+  const app = $("app");
+  app.addEventListener("dragover", (event) => { event.preventDefault(); app.classList.add("drop"); });
+  app.addEventListener("dragleave", () => app.classList.remove("drop"));
+  app.addEventListener("drop", (event) => {
+    event.preventDefault();
+    app.classList.remove("drop");
+    const files = [...(event.dataTransfer?.files || [])].filter((f) => /\.pdf$/i.test(f.name) || f.type === "application/pdf");
+    if (files.length) void addIncoming(files.map((file) => ({ file, path: file.name })));
+  });
+  showPane("board");
+}
+
+async function boot() {
+  try {
+    wire();
+    const errors = bootChecks();
+    window.__quire = {
+      selfCheck,
+      loadSamples,
+      run: runPipeline,
+      get groups() { return state.groups; },
+      get files() { return state.files; },
+      get settings() { return state.settings; },
+      debug: () => state.debug,
+      errors,
+    };
+    await loadSession();
+    const caps = window.showDirectoryPicker ? "In-place rename is available in this browser." : "Folder write is unavailable here. Renames download a plan.";
+    if (!state.activity.length) logActivity(caps);
+    state.phase = state.files.length ? "Restored fingerprints. Run the pipeline or reopen the folder." : "Open a folder or load the sample library. Nothing is renamed until you confirm a group.";
+    paint();
+  } catch (err) {
+    const el = document.getElementById("status");
+    if (el) el.textContent = "Quire failed to start: " + (err.message || err);
+  }
+}
+
+void boot();
+
+</script>
+</body>
+</html>
